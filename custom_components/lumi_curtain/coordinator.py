@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from asyncio import sleep
 from datetime import timedelta
 
 import bleak_retry_connector
@@ -19,15 +20,20 @@ from .protocol import (
     AuthenticationError,
     Properties,
     ProtocolError,
+    UnsupportedMTUError,
     get_payload,
     parse_properties,
     set_payload,
 )
-from .transport import Session
+from .transport import RETRY_DELAYS, Session
 
 _LOGGER = logging.getLogger(__name__)
 IDLE_INTERVAL = timedelta(seconds=30)
 MOVING_INTERVAL = timedelta(seconds=2)
+CONNECT_TIMEOUT = 20
+CONNECT_BUDGET = 120
+UPDATE_BUDGET = 150
+AUTH_COOLDOWN = 20
 
 
 class CurtainCoordinator(DataUpdateCoordinator[Properties]):
@@ -100,30 +106,49 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
             and not self._session.needs_rekey
         ):
             return self._session
-        await self._disconnect()
-        device = bluetooth.async_ble_device_from_address(
-            self.hass, self.address, connectable=True
-        )
-        if device is None:
-            raise BleakError("Curtain is not advertising on a connectable adapter")
-        self._client = await establish_connection(
-            # Resolve after HA Bluetooth setup installs its proxy-aware client.
-            bleak_retry_connector.BleakClientWithServiceCache,
-            device,
-            self.address,
-            disconnected_callback=self._disconnected,
-            ble_device_callback=lambda: (
-                bluetooth.async_ble_device_from_address(
-                    self.hass, self.address, connectable=True
-                )
-                or device
-            ),
-        )
-        self._session = Session(self._client, self._push, self._session_error)
-        async with asyncio.timeout(45):
-            await self._session.login(self._ltmk)
-        self._values = {}
-        return self._session
+        async with asyncio.timeout(CONNECT_BUDGET):
+            for attempt in range(3):
+                if self._stopping:
+                    raise ProtocolError("Integration is unloading")
+                await self._disconnect()
+                try:
+                    device = bluetooth.async_ble_device_from_address(
+                        self.hass, self.address, connectable=True
+                    )
+                    if device is None:
+                        raise BleakError(
+                            "Curtain is not advertising on a connectable adapter"
+                        )
+                    async with asyncio.timeout(CONNECT_TIMEOUT):
+                        self._client = await establish_connection(
+                            bleak_retry_connector.BleakClientWithServiceCache,
+                            device,
+                            self.address,
+                            max_attempts=1,
+                            disconnected_callback=self._disconnected,
+                            ble_device_callback=lambda device=device: (
+                                bluetooth.async_ble_device_from_address(
+                                    self.hass, self.address, connectable=True
+                                )
+                                or device
+                            ),
+                        )
+                    self._session = Session(
+                        self._client, self._push, self._session_error
+                    )
+                    await self._session.login(self._ltmk)
+                    self._values = {}
+                    return self._session
+                except AuthenticationError, UnsupportedMTUError:
+                    raise
+                except ProtocolError, BleakError, TimeoutError:
+                    delay = AUTH_COOLDOWN if self._client else RETRY_DELAYS[attempt % 2]
+                    await self._disconnect()
+                    if attempt == 2 or self._stopping:
+                        raise
+                    _LOGGER.debug("Connection setup failed; retrying after %s s", delay)
+                    await sleep(delay)
+        raise ProtocolError("Connection attempts exhausted")
 
     async def _disconnect(self) -> None:
         self._ready = False
@@ -142,15 +167,31 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
     async def _async_update_data(self) -> Properties:
         async with self._lock:
             try:
-                session = await self._connect()
-                response = await session.request(2, get_payload(READ_PROPERTIES))
-                values = parse_properties(response)
-                if not all(key in values for key in READ_PROPERTIES):
-                    raise ProtocolError("Missing curtain state properties")
-                if not 0 <= values[POSITION] <= 100 or values[STATUS] not in (0, 1, 2):
-                    raise ProtocolError("Invalid curtain state")
-                self._ready = True
-                return dict(self._values)
+                async with asyncio.timeout(UPDATE_BUDGET):
+                    for attempt in range(2):
+                        session = await self._connect()
+                        try:
+                            response = await session.request(
+                                2, get_payload(READ_PROPERTIES)
+                            )
+                            values = parse_properties(response)
+                            if not all(key in values for key in READ_PROPERTIES):
+                                raise ProtocolError("Missing curtain state properties")
+                            if not 0 <= values[POSITION] <= 100 or values[
+                                STATUS
+                            ] not in (0, 1, 2):
+                                raise ProtocolError("Invalid curtain state")
+                        except AuthenticationError, UnsupportedMTUError:
+                            raise
+                        except ProtocolError, BleakError, TimeoutError:
+                            if attempt or self._stopping:
+                                raise
+                            await self._disconnect()
+                            await sleep(AUTH_COOLDOWN)
+                            continue
+                        self._ready = True
+                        return dict(self._values)
+                raise ProtocolError("State read attempts exhausted")
             except AuthenticationError as err:
                 await self._disconnect()
                 raise ConfigEntryAuthFailed("Device rejected LTMK") from err

@@ -3,6 +3,7 @@
 import asyncio
 import struct
 import zlib
+from asyncio import sleep
 from collections.abc import Callable
 from contextlib import suppress
 
@@ -34,6 +35,9 @@ OK = bytes.fromhex("00000100")
 ACK = bytes.fromhex("00000300")
 TIMEOUT = 10
 CONTROL_WAIT = 0.6
+RETRY_DELAYS = (2, 4)
+LOGIN_TIMEOUT = 8
+SUBSCRIBE_TIMEOUT = 5
 # Re-key before either 16-bit wire counter wraps, including a margin for pushes.
 REKEY_AT = 0xFFF0
 
@@ -175,15 +179,50 @@ class Session:
         if self._capacity(AUTH) < 68:
             raise UnsupportedMTUError("Secure login needs ATT MTU >= 71")
         for uuid in (UPNP, AUTH, WRITE, NOTIFY):
-            await self.client.start_notify(
-                uuid, lambda _char, data, uuid=uuid: self._notification(uuid, data)
-            )
+            for attempt in range(3):
+                try:
+                    async with asyncio.timeout(SUBSCRIBE_TIMEOUT):
+                        await self.client.start_notify(
+                            uuid,
+                            lambda _char, data, uuid=uuid: self._notification(
+                                uuid, data
+                            ),
+                        )
+                    break
+                except BleakError, TimeoutError:
+                    if attempt == 2 or not self.client.is_connected:
+                        raise
+                    await sleep(RETRY_DELAYS[attempt])
+        for attempt in range(3):
+            # A new handshake needs fresh keys and no packets from the failed one.
+            self._keys = b""
+            self._error = None
+            for queue in self._queues.values():
+                while not queue.empty():
+                    queue.get_nowait()
+            if not self.client.is_connected:
+                raise BleakError("Curtain disconnected before authentication")
+            try:
+                async with asyncio.timeout(LOGIN_TIMEOUT):
+                    await self._authenticate(ltmk)
+                break
+            except AuthenticationError, UnsupportedMTUError:
+                raise
+            except ProtocolError, BleakError, TimeoutError:
+                if attempt == 2 or not self.client.is_connected:
+                    raise
+                await sleep(RETRY_DELAYS[attempt])
+        self._reader = asyncio.create_task(self._read_notifications())
+        await self.request(0xF0)
+
+    async def _authenticate(self, ltmk: bytes) -> None:
+        """Perform one greeting and fresh ECDH exchange on the subscribed link."""
         for opcode in range(4):
             try:
                 await self._write(VENDOR, bytes([opcode]))
             except BleakError, ProtocolError:
                 break
-            await asyncio.sleep(0.06)
+            await sleep(0.06)
         await self._write(UPNP, b"\xa4")
         for _ in range(2):
             challenge = await self._recv(AUTH)
@@ -217,8 +256,6 @@ class Session:
             raise AuthenticationError("Device rejected LTMK")
         if verdict != bytes.fromhex("51000000"):
             raise ProtocolError("Device rejected secure login")
-        self._reader = asyncio.create_task(self._read_notifications())
-        await self.request(0xF0)
 
     async def _auth_parcel(self, code: int, payload: bytes) -> None:
         await self._write(AUTH, bytes([0, 0, 0, code, 1, 0]))

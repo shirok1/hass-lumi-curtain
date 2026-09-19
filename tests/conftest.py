@@ -1,5 +1,6 @@
 """A simulated peripheral at the Bleak boundary; real HA and real crypto."""
 
+import asyncio
 import struct
 import zlib
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,6 +30,24 @@ LTMK = bytes(range(32))  # Synthetic test credential.
 @pytest.fixture(autouse=True)
 def custom_integrations(enable_custom_integrations):
     """Use the actual custom integration loader."""
+
+
+@pytest.fixture(autouse=True)
+def retry_sleep():
+    """Observe backoff without slowing the simulated Bluetooth conversations."""
+
+    async def pause(_delay):
+        await asyncio.sleep(0)
+
+    with (
+        patch(
+            "custom_components.lumi_curtain.coordinator.sleep", side_effect=pause
+        ) as connect_sleep,
+        patch(
+            "custom_components.lumi_curtain.transport.sleep", side_effect=pause
+        ) as auth_sleep,
+    ):
+        yield connect_sleep, auth_sleep
 
 
 class Peripheral:
