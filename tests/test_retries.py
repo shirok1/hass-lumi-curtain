@@ -12,6 +12,23 @@ from custom_components.lumi_curtain.protocol import AuthenticationError, Protoco
 from custom_components.lumi_curtain.transport import AUTH, NOTIFY, UPNP, WRITE, Session
 
 from .conftest import ADDRESS, LTMK
+from .test_config_flow import discovery
+
+
+async def test_wait_for_connectable_proxy_advertisement(hass, ble):
+    coordinator = CurtainCoordinator(hass, ADDRESS, LTMK.hex())
+    ble[0].return_value = None
+    ble[2].side_effect = None
+    advertisement = discovery()
+    ble[2].return_value = advertisement
+    await coordinator.async_refresh()
+    assert coordinator.last_update_success
+    assert ble[1].call_args.args[1] is advertisement.device
+    args = ble[2].call_args.args
+    assert args[1](advertisement)
+    assert args[2] == {"address": ADDRESS, "connectable": True}
+    assert args[4] == 20
+    await coordinator.async_shutdown()
 
 
 async def test_connect_third_attempt_and_concurrent_reuse(

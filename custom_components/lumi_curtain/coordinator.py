@@ -112,14 +112,21 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                     raise ProtocolError("Integration is unloading")
                 await self._disconnect()
                 try:
-                    device = bluetooth.async_ble_device_from_address(
-                        self.hass, self.address, connectable=True
-                    )
-                    if device is None:
-                        raise BleakError(
-                            "Curtain is not advertising on a connectable adapter"
-                        )
                     async with asyncio.timeout(CONNECT_TIMEOUT):
+                        device = bluetooth.async_ble_device_from_address(
+                            self.hass, self.address, connectable=True
+                        )
+                        if device is None:
+                            advertisement = (
+                                await bluetooth.async_process_advertisements(
+                                    self.hass,
+                                    lambda info: info.connectable,
+                                    {"address": self.address, "connectable": True},
+                                    bluetooth.BluetoothScanningMode.PASSIVE,
+                                    CONNECT_TIMEOUT,
+                                )
+                            )
+                            device = advertisement.device
                         self._client = await establish_connection(
                             bleak_retry_connector.BleakClientWithServiceCache,
                             device,

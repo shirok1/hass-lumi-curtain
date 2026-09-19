@@ -253,5 +253,9 @@ def ble(peripheral):
             "custom_components.lumi_curtain.coordinator.establish_connection",
             side_effect=connect,
         ) as connect_mock,
+        patch(
+            "custom_components.lumi_curtain.coordinator.bluetooth.async_process_advertisements",
+            side_effect=TimeoutError,
+        ) as wait_for_advertisement,
     ):
-        yield lookup, connect_mock
+        yield lookup, connect_mock, wait_for_advertisement
