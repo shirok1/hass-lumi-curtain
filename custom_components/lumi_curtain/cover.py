@@ -52,6 +52,11 @@ class LumiCurtain(CoordinatorEntity[CurtainCoordinator], CoverEntity):
             model_id=MODEL,
         )
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Release this curtain's connection when HA disables its only entity."""
+        await super().async_will_remove_from_hass()
+        await self.coordinator.async_shutdown()
+
     @property
     def current_cover_position(self) -> int | None:
         return self.coordinator.data.get(POSITION)

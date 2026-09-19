@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from asyncio import sleep
+from contextlib import suppress
 from datetime import timedelta
 
 import bleak_retry_connector
@@ -58,6 +59,7 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
         self._client: BleakClient | None = None
         self._session: Session | None = None
         self._lock = asyncio.Lock()
+        self._active_task: asyncio.Task | None = None
         self._ready = False
         self._stopping = False
         self._values: Properties = {}
@@ -173,6 +175,7 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
 
     async def _async_update_data(self) -> Properties:
         async with self._lock:
+            self._active_task = asyncio.current_task()
             try:
                 async with asyncio.timeout(UPDATE_BUDGET):
                     for attempt in range(2):
@@ -209,11 +212,14 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
             except asyncio.CancelledError:
                 await self._disconnect()
                 raise
+            finally:
+                self._active_task = None
 
     async def async_command(self, piid: int, value: int) -> None:
         """Send once and require a property ACK, without optimistic position."""
         payload = set_payload(piid, value)
         async with self._lock:
+            self._active_task = asyncio.current_task()
             try:
                 session = await self._connect()
                 response = parse_properties(await session.request(0, payload))
@@ -233,6 +239,8 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
             except asyncio.CancelledError:
                 await self._disconnect()
                 raise
+            finally:
+                self._active_task = None
         # Poll in two seconds until the first read establishes the actual state.
         self.update_interval = MOVING_INTERVAL
         await self.async_request_refresh()
@@ -241,5 +249,10 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
         """Stop HA refresh timers and release the BLE connection."""
         self._stopping = True
         await super().async_shutdown()
+        if (task := self._active_task) and task is not asyncio.current_task():
+            self._active_task = None
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
         async with self._lock:
             await self._disconnect()

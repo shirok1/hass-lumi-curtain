@@ -3,8 +3,10 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
-from .const import CONF_LTMK, DEFAULT_NAME
+from .const import CONF_LTMK, DEFAULT_NAME, DOMAIN
 from .coordinator import CurtainCoordinator
 
 type CurtainConfigEntry = ConfigEntry[CurtainCoordinator]
@@ -19,7 +21,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: CurtainConfigEntry) -> b
         hass, entry.data["address"], entry.data[CONF_LTMK], entry
     )
     try:
-        await coordinator.async_config_entry_first_refresh()
+        device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, entry.data["address"]), entry.entry_id
+        )
+        entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+        if (device and device.disabled_by) or (
+            entities and all(entity.disabled_by for entity in entities)
+        ):
+            coordinator.data = {}
+            await coordinator.async_shutdown()
+        else:
+            await coordinator.async_config_entry_first_refresh()
         entry.runtime_data = coordinator
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except BaseException:
