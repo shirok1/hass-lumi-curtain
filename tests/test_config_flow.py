@@ -3,7 +3,9 @@
 from unittest.mock import patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import device_registry as dr
 
 from custom_components.lumi_curtain.const import DOMAIN
 
@@ -15,18 +17,18 @@ async def test_user_setup(hass, peripheral, ble):
         DOMAIN, context={"source": "user"}
     )
     assert result["type"] == FlowResultType.FORM
+    assert set(result["data_schema"].schema) == {"address", "ltmk"}
     with patch("custom_components.lumi_curtain.async_setup_entry", return_value=True):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {
                 "address": ADDRESS.lower().replace(":", "-"),
                 "ltmk": LTMK.hex().upper(),
-                "name": "Study",
             },
         )
         await hass.async_block_till_done()
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Study"
+    assert result["title"] == "Aqara Curtain"
     assert result["data"] == {"address": ADDRESS, "ltmk": LTMK.hex()}
     assert result["result"].unique_id == ADDRESS
     peripheral.client.disconnect.assert_awaited_once()
@@ -127,7 +129,7 @@ async def test_bluetooth_discovery(hass, peripheral, ble, name, payload):
     )
     assert result["step_id"] == "bluetooth_confirm"
     assert result["description_placeholders"] == {"address": ADDRESS}
-    assert "address" not in result["data_schema"].schema
+    assert set(result["data_schema"].schema) == {"ltmk"}
     ble[1].assert_not_called()
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -135,15 +137,23 @@ async def test_bluetooth_discovery(hass, peripheral, ble, name, payload):
     )
     assert result["step_id"] == "bluetooth_confirm"
     assert result["errors"] == {"base": "invalid_ltmk"}
-    with patch("custom_components.lumi_curtain.async_setup_entry", return_value=True):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {"ltmk": LTMK.hex()},
-        )
-        await hass.async_block_till_done()
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"ltmk": LTMK.hex()},
+    )
+    await hass.async_block_till_done()
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Aqara Curtain"
     assert result["data"] == {"address": ADDRESS, "ltmk": LTMK.hex()}
     assert result["result"].unique_id == ADDRESS
+    entry = result["result"]
+    assert entry.state == ConfigEntryState.LOADED
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert len(devices) == 1
+    # HA's completion page uses this registered device for naming and area selection.
+    assert devices[0].name == "Aqara Curtain"
+    assert devices[0].primary_config_entry == entry.entry_id
+    await hass.config_entries.async_unload(entry.entry_id)
 
 
 @pytest.mark.parametrize(

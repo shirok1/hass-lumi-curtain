@@ -3,12 +3,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect a Aqara curtain",
+        "title": "Connect an Aqara curtain",
         "description": "Connect an Aqara HMCN02 Bluetooth curtain. Close Mi Home and other apps connected to the curtain, then enter its Bluetooth address and device key (64 hexadecimal characters). You can use a local Bluetooth adapter or a proxy with active connections enabled.",
         "data": {
           "address": "Bluetooth address",
-          "ltmk": "Device key (LTMK)",
-          "name": "Curtain name"
+          "ltmk": "Device key (LTMK)"
         }
       },
       "reauth_confirm": {
@@ -22,8 +21,7 @@
         "title": "Connect your Aqara curtain",
         "description": "Found an Aqara curtain ({address}). Close Mi Home and other apps connected to it, then enter its device key (64 hexadecimal characters).",
         "data": {
-          "ltmk": "Device key (LTMK)",
-          "name": "Curtain name"
+          "ltmk": "Device key (LTMK)"
         }
       }
     },

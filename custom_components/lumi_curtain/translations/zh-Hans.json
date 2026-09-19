@@ -7,8 +7,7 @@
         "description": "连接 Aqara HMCN02 蓝牙窗帘。请关闭米家及其他正在连接窗帘的应用，然后输入蓝牙地址和设备密钥（64 个十六进制字符）。支持本机蓝牙适配器和已启用主动连接的蓝牙代理。",
         "data": {
           "address": "蓝牙地址",
-          "ltmk": "设备密钥（LTMK）",
-          "name": "窗帘名称"
+          "ltmk": "设备密钥（LTMK）"
         }
       },
       "reauth_confirm": {
@@ -22,8 +21,7 @@
         "title": "连接 Aqara 窗帘",
         "description": "已发现 Aqara 窗帘（{address}）。请关闭米家及其他正在连接窗帘的应用，然后输入设备密钥（64 个十六进制字符）。",
         "data": {
-          "ltmk": "设备密钥（LTMK）",
-          "name": "窗帘名称"
+          "ltmk": "设备密钥（LTMK）"
         }
       }
     },

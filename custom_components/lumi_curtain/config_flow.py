@@ -6,7 +6,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_ADDRESS, CONF_NAME
+from homeassistant.const import CONF_ADDRESS
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.selector import (
     TextSelector,
@@ -66,7 +66,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = error
             else:
                 return self.async_create_entry(
-                    title=user_input.get(CONF_NAME, "").strip() or DEFAULT_NAME,
+                    title=DEFAULT_NAME,
                     data=data,
                 )
         return self.async_show_form(
@@ -78,7 +78,6 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_LTMK): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
-                    vol.Optional(CONF_NAME, default=DEFAULT_NAME): str,
                 }
             ),
         )
@@ -104,7 +103,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                     errors["base"] = error
                 else:
                     return self.async_create_entry(
-                        title=user_input.get(CONF_NAME, "").strip() or DEFAULT_NAME,
+                        title=DEFAULT_NAME,
                         data=data,
                     )
         return self.async_show_form(
@@ -116,7 +115,6 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_LTMK): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
-                    vol.Optional(CONF_NAME, default=DEFAULT_NAME): str,
                 }
             ),
         )
