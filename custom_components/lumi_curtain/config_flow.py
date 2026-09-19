@@ -34,13 +34,22 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
         """Identify the curtain without connecting or requiring a local adapter."""
         if not discovery_info.connectable:
             return self.async_abort(reason="not_connectable")
-        beacon = discovery_info.service_data.get(MIBEACON_UUID, b"")
-        matches_product = (
-            len(beacon) >= 5
-            and beacon[1] >> 4 >= 2
-            and int.from_bytes(beacon[2:4], "little") == PRODUCT_ID
-        )
-        if discovery_info.name != MODEL and not matches_product:
+        beacon = discovery_info.service_data.get(MIBEACON_UUID)
+        if beacon is not None:
+            if (
+                len(beacon) < 5
+                or beacon[1] >> 4 < 2
+                or int.from_bytes(beacon[2:4], "little") != PRODUCT_ID
+            ):
+                return self.async_abort(reason="not_supported")
+            # A relayed frame must not identify its broadcaster as the curtain.
+            if beacon[0] & 0x10 and (
+                len(beacon) < 11
+                or beacon[5:11][::-1].hex()
+                != discovery_info.address.replace(":", "").lower()
+            ):
+                return self.async_abort(reason="not_supported")
+        elif discovery_info.name != MODEL:
             return self.async_abort(reason="not_supported")
         self._discovered_address = discovery_info.address.upper()
         await self.async_set_unique_id(self._discovered_address)

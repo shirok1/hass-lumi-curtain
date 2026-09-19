@@ -120,8 +120,10 @@ def discovery(
     ("name", "payload"),
     [
         ("lumi.curtain.hmcn02", None),
-        ("Mijia mesh demo", bytes.fromhex("9053390c01")),
-        ("", bytes.fromhex("9853390c01")),
+        ("Mijia mesh demo", bytes.fromhex("9053390c01ffeeddccbbaa")),
+        ("", bytes.fromhex("9853390c01ffeeddccbbaa")),
+        ("", bytes.fromhex("8053390c01")),
+        (ADDRESS, bytes.fromhex("b054390c01ffeeddccbbaa080e00")),
     ],
 )
 async def test_bluetooth_discovery(hass, peripheral, ble, name, payload):
@@ -168,6 +170,17 @@ async def test_bluetooth_discovery(hass, peripheral, ble, name, payload):
         ("Other device", bytes.fromhex("9053380c01"), True, "not_supported"),
         ("Other device", bytes.fromhex("9053390c"), True, "not_supported"),
         ("Other device", bytes.fromhex("9001390c01"), True, "not_supported"),
+        # A name must not override a different product ID in the advertisement.
+        ("lumi.curtain.hmcn02", bytes.fromhex("9053380c01"), True, "not_supported"),
+        ("lumi.curtain.hmcn02", b"", True, "not_supported"),
+        # An embedded MAC must identify the broadcaster, not another device.
+        ("Mijia mesh demo", bytes.fromhex("9053390c01"), True, "not_supported"),
+        (
+            "Mijia mesh demo",
+            bytes.fromhex("9053390c01060504030201"),
+            True,
+            "not_supported",
+        ),
     ],
 )
 async def test_discovery_rejects_other_devices(
