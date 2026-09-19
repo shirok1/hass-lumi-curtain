@@ -7,6 +7,7 @@ import pytest
 from bleak.exc import BleakError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.lumi_curtain import async_unload_entry
@@ -71,6 +72,48 @@ async def test_full_cover_lifecycle(hass, entry, peripheral, ble):
     await hass.config_entries.async_unload(entry.entry_id)
     assert peripheral.client.disconnect.await_count == 1
     assert coordinator._session is None
+
+
+@pytest.mark.parametrize("title", ["Lumi Curtain", "Living room"])
+async def test_brand_update_preserves_registry_names(hass, entry, ble, title):
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(entry, title=title)
+    devices = dr.async_get(hass)
+    device = devices.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, ADDRESS)},
+        name=title,
+    )
+    devices.async_update_device(device.id, name_by_user="客厅窗帘")
+    entities = er.async_get(hass)
+    entity = entities.async_get_or_create(
+        "cover",
+        DOMAIN,
+        ADDRESS,
+        suggested_object_id="existing_curtain",
+        config_entry=entry,
+        device_id=device.id,
+    )
+    entities.async_update_entity(entity.entity_id, name="落地窗")
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    expected = "Aqara Curtain" if title == "Lumi Curtain" else title
+    assert entry.title == expected
+    device = devices.async_get(device.id)
+    assert isinstance(device, dr.DeviceEntry)
+    assert device.name == expected
+    assert device.name_by_user == "客厅窗帘"
+    assert device.manufacturer == "Aqara"
+    assert device.model == "Curtain HMCN02"
+    assert device.model_id == "lumi.curtain.hmcn02"
+    assert (
+        hass.states.get("cover.existing_curtain").attributes["friendly_name"]
+        == "落地窗"
+    )
+    assert len(er.async_entries_for_config_entry(entities, entry.entry_id)) == 1
+    await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_disconnect_reconnect_and_old_callback(hass, entry, peripheral, ble):

@@ -1,29 +1,29 @@
 {
-  "title": "Lumi 蓝牙窗帘",
+  "title": "Aqara 蓝牙窗帘",
   "config": {
     "step": {
       "user": {
-        "title": "连接 Lumi 窗帘",
-        "description": "支持 lumi.curtain.hmcn02。请关闭米家和蓝牙控制网页，输入窗帘的蓝牙地址及 32 字节 LTMK（64 个十六进制字符）。蓝牙适配器必须支持主动连接及至少 71 的 ATT MTU。",
+        "title": "连接 Aqara 窗帘",
+        "description": "连接 Aqara HMCN02 蓝牙窗帘。请关闭米家及其他正在连接窗帘的应用，然后输入蓝牙地址和设备密钥（64 个十六进制字符）。支持本机蓝牙适配器和已启用主动连接的蓝牙代理。",
         "data": {
           "address": "蓝牙地址",
-          "ltmk": "LTMK",
-          "name": "名称"
+          "ltmk": "设备密钥（LTMK）",
+          "name": "窗帘名称"
         }
       },
       "reauth_confirm": {
         "title": "更新窗帘凭据",
         "description": "窗帘拒绝了已保存的 LTMK。请输入当前的 32 字节 LTMK。",
         "data": {
-          "ltmk": "LTMK"
+          "ltmk": "设备密钥（LTMK）"
         }
       },
       "bluetooth_confirm": {
-        "title": "配置发现的窗帘",
-        "description": "已发现窗帘 {address}。请关闭米家及其他占用设备的应用，然后输入 32 字节 LTMK。",
+        "title": "连接 Aqara 窗帘",
+        "description": "已发现 Aqara 窗帘（{address}）。请关闭米家及其他正在连接窗帘的应用，然后输入设备密钥（64 个十六进制字符）。",
         "data": {
-          "ltmk": "LTMK",
-          "name": "名称"
+          "ltmk": "设备密钥（LTMK）",
+          "name": "窗帘名称"
         }
       }
     },
@@ -37,7 +37,7 @@
     "abort": {
       "already_configured": "此窗帘已配置。",
       "reauth_successful": "凭据已更新。",
-      "not_supported": "此设备不是受支持的 Lumi 窗帘。",
+      "not_supported": "此设备不是受支持的 Aqara 窗帘。",
       "not_connectable": "此蓝牙来源仅支持广播监听，无法连接窗帘。请使用支持主动连接的适配器或代理。"
     }
   }

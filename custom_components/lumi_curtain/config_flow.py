@@ -14,7 +14,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .const import CONF_LTMK, DOMAIN, MIBEACON_UUID, MODEL, PRODUCT_ID
+from .const import CONF_LTMK, DEFAULT_NAME, DOMAIN, MIBEACON_UUID, MODEL, PRODUCT_ID
 from .coordinator import CurtainCoordinator
 from .protocol import UnsupportedMTUError
 
@@ -46,7 +46,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(self._discovered_address)
         self._abort_if_unique_id_configured()
         self.context["title_placeholders"] = {
-            "name": f"Lumi Curtain {self._discovered_address[-5:]}",
+            "name": f"{DEFAULT_NAME} {self._discovered_address[-5:]}",
         }
         return await self.async_step_bluetooth_confirm()
 
@@ -66,7 +66,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = error
             else:
                 return self.async_create_entry(
-                    title=user_input.get(CONF_NAME, "").strip() or "Lumi Curtain",
+                    title=user_input.get(CONF_NAME, "").strip() or DEFAULT_NAME,
                     data=data,
                 )
         return self.async_show_form(
@@ -78,7 +78,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_LTMK): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
-                    vol.Optional(CONF_NAME, default="Lumi Curtain"): str,
+                    vol.Optional(CONF_NAME, default=DEFAULT_NAME): str,
                 }
             ),
         )
@@ -104,7 +104,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                     errors["base"] = error
                 else:
                     return self.async_create_entry(
-                        title=user_input.get(CONF_NAME, "").strip() or "Lumi Curtain",
+                        title=user_input.get(CONF_NAME, "").strip() or DEFAULT_NAME,
                         data=data,
                     )
         return self.async_show_form(
@@ -116,7 +116,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_LTMK): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
-                    vol.Optional(CONF_NAME, default="Lumi Curtain"): str,
+                    vol.Optional(CONF_NAME, default=DEFAULT_NAME): str,
                 }
             ),
         )

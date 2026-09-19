@@ -1,29 +1,29 @@
 {
-  "title": "Lumi Curtain BLE",
+  "title": "Aqara Curtain BLE",
   "config": {
     "step": {
       "user": {
-        "title": "Connect a Lumi curtain",
-        "description": "Supports lumi.curtain.hmcn02. Close Mi Home and the Bluetooth control page, then enter the curtain's Bluetooth address and 32-byte LTMK (64 hexadecimal characters). A connectable Bluetooth adapter with ATT MTU of at least 71 is required.",
+        "title": "Connect a Aqara curtain",
+        "description": "Connect an Aqara HMCN02 Bluetooth curtain. Close Mi Home and other apps connected to the curtain, then enter its Bluetooth address and device key (64 hexadecimal characters). You can use a local Bluetooth adapter or a proxy with active connections enabled.",
         "data": {
           "address": "Bluetooth address",
-          "ltmk": "LTMK",
-          "name": "Name"
+          "ltmk": "Device key (LTMK)",
+          "name": "Curtain name"
         }
       },
       "reauth_confirm": {
         "title": "Update curtain credentials",
         "description": "The curtain rejected its saved LTMK. Enter the current 32-byte LTMK.",
         "data": {
-          "ltmk": "LTMK"
+          "ltmk": "Device key (LTMK)"
         }
       },
       "bluetooth_confirm": {
-        "title": "Set up discovered curtain",
-        "description": "Found curtain {address}. Close Mi Home and other apps connected to the device, then enter its 32-byte LTMK.",
+        "title": "Connect your Aqara curtain",
+        "description": "Found an Aqara curtain ({address}). Close Mi Home and other apps connected to it, then enter its device key (64 hexadecimal characters).",
         "data": {
-          "ltmk": "LTMK",
-          "name": "Name"
+          "ltmk": "Device key (LTMK)",
+          "name": "Curtain name"
         }
       }
     },
@@ -37,7 +37,7 @@
     "abort": {
       "already_configured": "This curtain is already configured.",
       "reauth_successful": "Credentials updated successfully.",
-      "not_supported": "This device is not a supported Lumi curtain.",
+      "not_supported": "This device is not a supported Aqara curtain.",
       "not_connectable": "This Bluetooth source only receives advertisements. Use an adapter or proxy that supports active connections."
     }
   }

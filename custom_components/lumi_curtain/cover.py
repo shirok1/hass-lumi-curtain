@@ -48,7 +48,8 @@ class LumiCurtain(CoordinatorEntity[CurtainCoordinator], CoverEntity):
             connections={(CONNECTION_BLUETOOTH, self.coordinator.address)},
             name=entry.title,
             manufacturer="Aqara",
-            model=MODEL,
+            model="Curtain HMCN02",
+            model_id=MODEL,
         )
 
     @property

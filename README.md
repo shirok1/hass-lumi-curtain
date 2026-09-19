@@ -1,6 +1,6 @@
-# Lumi Curtain BLE
+# Aqara Curtain BLE
 
-通过本地蓝牙控制 `lumi.curtain.hmcn02` 的 Home Assistant 自定义集成。
+通过本地蓝牙控制 Aqara（绿米）HMCN02 窗帘（`lumi.curtain.hmcn02`）的 Home Assistant 自定义集成。
 支持打开、关闭、停止和设置位置，无需云端连接或专用网关。
 
 ## 支持范围
@@ -21,12 +21,12 @@
 1. 将本仓库的 `custom_components/lumi_curtain` 目录复制到 Home Assistant
    配置目录下的 `custom_components/`。
 2. 重启 Home Assistant。
-3. 进入「设置 → 设备与服务 → 添加集成」，搜索 **Lumi Curtain BLE**。
+3. 进入「设置 → 设备与服务 → 添加集成」，搜索 **Aqara Curtain BLE**。
 
 ### HACS 安装
 
 1. 在 HACS 的自定义仓库中添加本仓库，类型选择「集成」。
-2. 下载 **Lumi Curtain BLE**，然后重启 Home Assistant。
+2. 下载 **Aqara Curtain BLE**，然后重启 Home Assistant。
 3. 在「设置 → 设备与服务」中添加集成。
 
 ## 配置
@@ -37,7 +37,7 @@
 ### 自动发现
 
 1. 确保窗帘位于本机蓝牙适配器或蓝牙代理的覆盖范围内。
-2. 在「设置 → 设备与服务」中找到 **Lumi Curtain BLE** 的发现卡片。
+2. 在「设置 → 设备与服务」中找到 **Aqara Curtain BLE** 的发现卡片。
 3. 点击配置，输入 LTMK，可选填设备名称。无需输入 MAC 地址。
 
 集成通过设备型号名称或 MiBeacon 产品标识识别窗帘。
@@ -46,13 +46,13 @@
 
 ### 手动添加
 
-在「设置 → 设备与服务 → 添加集成」中选择 **Lumi Curtain BLE**，填写以下字段：
+在「设置 → 设备与服务 → 添加集成」中选择 **Aqara Curtain BLE**，填写以下字段：
 
 | 字段 | 说明 |
 | --- | --- |
 | 蓝牙地址 | 窗帘的 MAC 地址，例如 `AA:BB:CC:DD:EE:FF` |
-| LTMK | 32 字节密钥，以 64 个十六进制字符输入 |
-| 名称 | 设备在 Home Assistant 中的名称，可选 |
+| 设备密钥（LTMK） | 32 字节密钥，以 64 个十六进制字符输入 |
+| 窗帘名称 | 设备在 Home Assistant 中的名称，可选 |
 
 12 字节 token 或 16 字节 beacon bindkey 不能替代 LTMK。
 集成会在保存配置前连接设备、验证凭据并读取状态。
