@@ -45,8 +45,10 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovered_address = discovery_info.address.upper()
         await self.async_set_unique_id(self._discovered_address)
         self._abort_if_unique_id_configured()
+        suffix = self._discovered_address.replace(":", "")[-6:]
         self.context["title_placeholders"] = {
-            "name": f"{DEFAULT_NAME} {self._discovered_address[-5:]}",
+            "name": f"{DEFAULT_NAME} {suffix}",
+            "suffix": suffix,
         }
         return await self.async_step_bluetooth_confirm()
 
@@ -73,12 +75,15 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="bluetooth_confirm",
             errors=errors,
             description_placeholders={"address": self._discovered_address},
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_LTMK): TextSelector(
-                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                    ),
-                }
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(
+                    {
+                        vol.Required(CONF_LTMK): TextSelector(
+                            TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                        ),
+                    }
+                ),
+                user_input,
             ),
         )
 
@@ -109,13 +114,16 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             errors=errors,
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_ADDRESS): str,
-                    vol.Required(CONF_LTMK): TextSelector(
-                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                    ),
-                }
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(
+                    {
+                        vol.Required(CONF_ADDRESS): str,
+                        vol.Required(CONF_LTMK): TextSelector(
+                            TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                        ),
+                    }
+                ),
+                user_input,
             ),
         )
 
@@ -138,6 +146,11 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
         return None
 
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
+        entry = self._get_reauth_entry()
+        self.context["title_placeholders"] = {
+            **self.context.get("title_placeholders", {}),
+            "suffix": entry.data[CONF_ADDRESS].replace(":", "")[-6:],
+        }
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
@@ -156,11 +169,14 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reauth_confirm",
             errors=errors,
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_LTMK): TextSelector(
-                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                    ),
-                }
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(
+                    {
+                        vol.Required(CONF_LTMK): TextSelector(
+                            TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                        ),
+                    }
+                ),
+                user_input,
             ),
         )

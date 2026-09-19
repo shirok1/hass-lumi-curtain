@@ -6,6 +6,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.translation import async_get_translations
 
 from custom_components.lumi_curtain.const import DOMAIN
 
@@ -76,6 +77,8 @@ async def test_reauthentication(hass, entry, peripheral, ble):
         data=entry.data,
     )
     assert result["step_id"] == "reauth_confirm"
+    progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)[0]
+    assert progress["context"]["title_placeholders"]["suffix"] == "DDEEFF"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"ltmk": "bad"}
     )
@@ -220,3 +223,58 @@ async def test_proxy_small_mtu_error(hass, peripheral, ble):
     )
     assert result["errors"] == {"base": "unsupported_mtu"}
     peripheral.client.disconnect.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    ("language", "label", "title", "flow_title"),
+    [
+        ("zh-Hans", "LTMK（32 字节）", "连接 Aqara 窗帘", "Aqara 窗帘 DDEEFF"),  # noqa: RUF001
+        (
+            "en",
+            "LTMK (32 bytes)",
+            "Connect your Aqara curtain",
+            "Aqara Curtain DDEEFF",
+        ),
+    ],
+)
+async def test_discovery_translations(hass, language, label, title, flow_title):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "bluetooth"}, data=discovery()
+    )
+    translations = await async_get_translations(hass, language, "config", {DOMAIN})
+    prefix = f"component.{result['handler']}.config.step.{result['step_id']}"
+    assert translations[f"{prefix}.data.ltmk"] == label
+    assert translations[f"{prefix}.title"] == title
+    assert ADDRESS in translations[f"{prefix}.description"].format(
+        **result["description_placeholders"]
+    )
+    progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)[0]
+    assert (
+        translations[f"component.{DOMAIN}.config.flow_title"].format(
+            **progress["context"]["title_placeholders"]
+        )
+        == flow_title
+    )
+
+
+@pytest.mark.parametrize("source", ["user", "bluetooth", "reauth"])
+async def test_failed_connection_retains_credentials(hass, entry, ble, source):
+    ble[0].return_value = None
+    context = {"source": source}
+    if source == "reauth":
+        entry.add_to_hass(hass)
+        context["entry_id"] = entry.entry_id
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context=context, data=discovery() if source == "bluetooth" else None
+    )
+    user_input = {"ltmk": LTMK.hex()}
+    if source == "user":
+        user_input["address"] = ADDRESS
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input
+    )
+    assert result["errors"] == {"base": "cannot_connect"}
+    fields = {field.schema: field for field in result["data_schema"].schema}
+    for key, value in user_input.items():
+        assert fields[key].description["suggested_value"] == value
+    assert result["data_schema"].schema[fields["ltmk"]].config["type"] == "password"

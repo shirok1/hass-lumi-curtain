@@ -4,24 +4,33 @@
     "step": {
       "user": {
         "title": "Connect an Aqara curtain",
-        "description": "Connect an Aqara HMCN02 Bluetooth curtain. Close Mi Home and other apps connected to the curtain, then enter its Bluetooth address and device key (64 hexadecimal characters). You can use a local Bluetooth adapter or a proxy with active connections enabled.",
+        "description": "Connect an Aqara HMCN02 Bluetooth curtain. Close Mi Home and other apps connected to the curtain, then enter its Bluetooth address and 32-byte LTMK. You can use a local Bluetooth adapter or a proxy with active connections enabled.",
         "data": {
           "address": "Bluetooth address",
-          "ltmk": "Device key (LTMK)"
+          "ltmk": "LTMK (32 bytes)"
+        },
+        "data_description": {
+          "ltmk": "64 hexadecimal characters. This is not a Mi Home BLE token or bindkey."
         }
       },
       "reauth_confirm": {
         "title": "Update curtain credentials",
         "description": "The curtain rejected its saved LTMK. Enter the current 32-byte LTMK.",
         "data": {
-          "ltmk": "Device key (LTMK)"
+          "ltmk": "LTMK (32 bytes)"
+        },
+        "data_description": {
+          "ltmk": "64 hexadecimal characters. This is not a Mi Home BLE token or bindkey."
         }
       },
       "bluetooth_confirm": {
         "title": "Connect your Aqara curtain",
-        "description": "Found an Aqara curtain ({address}). Close Mi Home and other apps connected to it, then enter its device key (64 hexadecimal characters).",
+        "description": "Found an Aqara curtain ({address}). Close Mi Home and other apps connected to it, then enter its 32-byte LTMK.",
         "data": {
-          "ltmk": "Device key (LTMK)"
+          "ltmk": "LTMK (32 bytes)"
+        },
+        "data_description": {
+          "ltmk": "64 hexadecimal characters. This is not a Mi Home BLE token or bindkey."
         }
       }
     },
@@ -37,6 +46,7 @@
       "reauth_successful": "Credentials updated successfully.",
       "not_supported": "This device is not a supported Aqara curtain.",
       "not_connectable": "This Bluetooth source only receives advertisements. Use an adapter or proxy that supports active connections."
-    }
+    },
+    "flow_title": "Aqara Curtain {suffix}"
   }
 }
