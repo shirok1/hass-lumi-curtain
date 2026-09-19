@@ -1,0 +1,27 @@
+{
+  "title": "Lumi 蓝牙窗帘",
+  "config": {
+    "step": {
+      "user": {
+        "title": "连接 Lumi 窗帘",
+        "description": "支持 lumi.curtain.hmcn02。请关闭米家和蓝牙控制网页，输入窗帘的蓝牙地址及 32 字节 LTMK（64 个十六进制字符）。蓝牙适配器必须支持主动连接及至少 69 的 ATT MTU。",
+        "data": {"address": "蓝牙地址", "ltmk": "LTMK", "name": "名称"}
+      },
+      "reauth_confirm": {
+        "title": "更新窗帘凭据",
+        "description": "窗帘拒绝了已保存的 LTMK。请输入当前的 32 字节 LTMK。",
+        "data": {"ltmk": "LTMK"}
+      }
+    },
+    "error": {
+      "invalid_address": "请输入 AA:BB:CC:DD:EE:FF 格式的蓝牙地址。",
+      "invalid_ltmk": "LTMK 必须为 64 个十六进制字符。",
+      "invalid_auth": "窗帘拒绝了此 LTMK。",
+      "cannot_connect": "无法与窗帘通信。请检查蓝牙距离、适配器 MTU 支持，并关闭其他已连接窗帘的应用。登录失败后，请等待约 20 秒再试。"
+    },
+    "abort": {
+      "already_configured": "此窗帘已配置。",
+      "reauth_successful": "凭据已更新。"
+    }
+  }
+}

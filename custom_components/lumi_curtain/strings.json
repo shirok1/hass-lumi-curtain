@@ -1,0 +1,27 @@
+{
+  "title": "Lumi Curtain BLE",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect a Lumi curtain",
+        "description": "Supports lumi.curtain.hmcn02. Close Mi Home and the Bluetooth control page, then enter the curtain's Bluetooth address and 32-byte LTMK (64 hexadecimal characters). A connectable Bluetooth adapter with ATT MTU of at least 69 is required.",
+        "data": {"address": "Bluetooth address", "ltmk": "LTMK", "name": "Name"}
+      },
+      "reauth_confirm": {
+        "title": "Update curtain credentials",
+        "description": "The curtain rejected its saved LTMK. Enter the current 32-byte LTMK.",
+        "data": {"ltmk": "LTMK"}
+      }
+    },
+    "error": {
+      "invalid_address": "Enter a Bluetooth address such as AA:BB:CC:DD:EE:FF.",
+      "invalid_ltmk": "The LTMK must be exactly 64 hexadecimal characters.",
+      "invalid_auth": "The curtain rejected the LTMK.",
+      "cannot_connect": "Unable to communicate with the curtain. Check Bluetooth range and adapter MTU support, and close other apps connected to the curtain. After a failed login, wait about 20 seconds before retrying."
+    },
+    "abort": {
+      "already_configured": "This curtain is already configured.",
+      "reauth_successful": "Credentials updated successfully."
+    }
+  }
+}

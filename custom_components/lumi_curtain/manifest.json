@@ -1,0 +1,13 @@
+{
+  "domain": "lumi_curtain",
+  "name": "Lumi Curtain BLE",
+  "codeowners": ["@shirok1"],
+  "config_flow": true,
+  "dependencies": ["bluetooth_adapters"],
+  "documentation": "https://github.com/shirok1/hass-lumi-curtain",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/shirok1/hass-lumi-curtain/issues",
+  "requirements": ["bleak-retry-connector==4.7.0"],
+  "version": "0.1.0"
+}
