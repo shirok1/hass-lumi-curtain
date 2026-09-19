@@ -4,9 +4,10 @@ import asyncio
 import logging
 from datetime import timedelta
 
+import bleak_retry_connector
 from bleak import BleakClient
 from bleak.exc import BleakError
-from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
+from bleak_retry_connector import establish_connection
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -106,7 +107,8 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
         if device is None:
             raise BleakError("Curtain is not advertising on a connectable adapter")
         self._client = await establish_connection(
-            BleakClientWithServiceCache,
+            # Resolve after HA Bluetooth setup installs its proxy-aware client.
+            bleak_retry_connector.BleakClientWithServiceCache,
             device,
             self.address,
             disconnected_callback=self._disconnected,

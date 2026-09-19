@@ -57,10 +57,11 @@ async def test_rejected_key(peripheral, session):
         await session.login(LTMK)
 
 
-async def test_small_mtu_and_invalid_key(peripheral, session):
+@pytest.mark.parametrize("capacity", [20, 66, 67])
+async def test_small_mtu_and_invalid_key(peripheral, session, capacity):
     with pytest.raises(ValueError):
         await session.login(b"wrong")
-    peripheral.characteristics[AUTH].max_write_without_response_size = 20
+    peripheral.characteristics[AUTH].max_write_without_response_size = capacity
     with pytest.raises(UnsupportedMTUError):
         await session.login(LTMK)
     peripheral.client.start_notify.assert_not_called()

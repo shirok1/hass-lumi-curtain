@@ -4,24 +4,41 @@
     "step": {
       "user": {
         "title": "Connect a Lumi curtain",
-        "description": "Supports lumi.curtain.hmcn02. Close Mi Home and the Bluetooth control page, then enter the curtain's Bluetooth address and 32-byte LTMK (64 hexadecimal characters). A connectable Bluetooth adapter with ATT MTU of at least 69 is required.",
-        "data": {"address": "Bluetooth address", "ltmk": "LTMK", "name": "Name"}
+        "description": "Supports lumi.curtain.hmcn02. Close Mi Home and the Bluetooth control page, then enter the curtain's Bluetooth address and 32-byte LTMK (64 hexadecimal characters). A connectable Bluetooth adapter with ATT MTU of at least 71 is required.",
+        "data": {
+          "address": "Bluetooth address",
+          "ltmk": "LTMK",
+          "name": "Name"
+        }
       },
       "reauth_confirm": {
         "title": "Update curtain credentials",
         "description": "The curtain rejected its saved LTMK. Enter the current 32-byte LTMK.",
-        "data": {"ltmk": "LTMK"}
+        "data": {
+          "ltmk": "LTMK"
+        }
+      },
+      "bluetooth_confirm": {
+        "title": "Set up discovered curtain",
+        "description": "Found curtain {address}. Close Mi Home and other apps connected to the device, then enter its 32-byte LTMK.",
+        "data": {
+          "ltmk": "LTMK",
+          "name": "Name"
+        }
       }
     },
     "error": {
       "invalid_address": "Enter a Bluetooth address such as AA:BB:CC:DD:EE:FF.",
       "invalid_ltmk": "The LTMK must be exactly 64 hexadecimal characters.",
       "invalid_auth": "The curtain rejected the LTMK.",
-      "cannot_connect": "Unable to communicate with the curtain. Check Bluetooth range and adapter MTU support, and close other apps connected to the curtain. After a failed login, wait about 20 seconds before retrying."
+      "cannot_connect": "Unable to communicate with the curtain. Check Bluetooth range and available proxy connection slots, and close other apps connected to the curtain. After a failed login, wait about 20 seconds before retrying.",
+      "unsupported_mtu": "The Bluetooth connection MTU is too small. Check the adapter or proxy firmware for support of ATT MTU 71 or greater."
     },
     "abort": {
       "already_configured": "This curtain is already configured.",
-      "reauth_successful": "Credentials updated successfully."
+      "reauth_successful": "Credentials updated successfully.",
+      "not_supported": "This device is not a supported Lumi curtain.",
+      "not_connectable": "This Bluetooth source only receives advertisements. Use an adapter or proxy that supports active connections."
     }
   }
 }

@@ -85,3 +85,128 @@ async def test_reauthentication(hass, entry, peripheral, ble):
         await hass.async_block_till_done()
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
+
+
+def discovery(
+    name="lumi.curtain.hmcn02", payload=None, connectable=True, source="proxy-1"
+):
+    from bleak.backends.device import BLEDevice
+    from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
+
+    from custom_components.lumi_curtain.const import MIBEACON_UUID
+
+    return BluetoothServiceInfoBleak(
+        name=name,
+        address=ADDRESS,
+        rssi=-50,
+        manufacturer_data={},
+        service_data={MIBEACON_UUID: payload} if payload is not None else {},
+        service_uuids=[],
+        source=source,
+        device=BLEDevice(ADDRESS, name, {"source": source}),
+        advertisement=None,
+        connectable=connectable,
+        time=0,
+        tx_power=None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "payload"),
+    [
+        ("lumi.curtain.hmcn02", None),
+        ("Mijia mesh demo", bytes.fromhex("9053390c01")),
+        ("", bytes.fromhex("9853390c01")),
+    ],
+)
+async def test_bluetooth_discovery(hass, peripheral, ble, name, payload):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "bluetooth"},
+        data=discovery(name, payload),
+    )
+    assert result["step_id"] == "bluetooth_confirm"
+    assert result["description_placeholders"] == {"address": ADDRESS}
+    assert "address" not in result["data_schema"].schema
+    ble[1].assert_not_called()
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"ltmk": "invalid"},
+    )
+    assert result["step_id"] == "bluetooth_confirm"
+    assert result["errors"] == {"base": "invalid_ltmk"}
+    with patch("custom_components.lumi_curtain.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"ltmk": LTMK.hex()},
+        )
+        await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"] == {"address": ADDRESS, "ltmk": LTMK.hex()}
+    assert result["result"].unique_id == ADDRESS
+
+
+@pytest.mark.parametrize(
+    ("name", "payload", "connectable", "reason"),
+    [
+        ("lumi.curtain.hmcn02", None, False, "not_connectable"),
+        ("Mijia mesh demo", None, True, "not_supported"),
+        ("lumi.curtain.hmcn05", None, True, "not_supported"),
+        ("Other device", bytes.fromhex("9053380c01"), True, "not_supported"),
+        ("Other device", bytes.fromhex("9053390c"), True, "not_supported"),
+        ("Other device", bytes.fromhex("9001390c01"), True, "not_supported"),
+    ],
+)
+async def test_discovery_rejects_other_devices(
+    hass, ble, name, payload, connectable, reason
+):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "bluetooth"},
+        data=discovery(name, payload, connectable),
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == reason
+    ble[1].assert_not_called()
+
+
+async def test_discovery_deduplicates_proxy_sources(hass, entry, ble):
+    first = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "bluetooth"},
+        data=discovery(source="proxy-1"),
+    )
+    second = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "bluetooth"},
+        data=discovery(source="proxy-2"),
+    )
+    assert first["type"] == FlowResultType.FORM
+    assert second["type"] == FlowResultType.ABORT
+    assert second["reason"] == "already_in_progress"
+    hass.config_entries.flow.async_abort(first["flow_id"])
+    entry.add_to_hass(hass)
+    third = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "bluetooth"},
+        data=discovery(),
+    )
+    assert third["reason"] == "already_configured"
+    ble[1].assert_not_called()
+
+
+async def test_proxy_small_mtu_error(hass, peripheral, ble):
+    from custom_components.lumi_curtain.transport import AUTH
+
+    peripheral.characteristics[AUTH].max_write_without_response_size = 20
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "bluetooth"},
+        data=discovery(),
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"ltmk": LTMK.hex()},
+    )
+    assert result["errors"] == {"base": "unsupported_mtu"}
+    peripheral.client.disconnect.assert_awaited_once()

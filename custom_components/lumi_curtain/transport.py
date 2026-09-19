@@ -170,10 +170,10 @@ class Session:
         """Run the greeting and CMD 0x50 mesh secure login."""
         if len(ltmk) != 32:
             raise ValueError("LTMK must contain 32 bytes")
-        # Login requires a single 66-byte public-key parcel. Refuse links
-        # that cannot carry it; authentication fragmentation is not supported.
-        if self._capacity(AUTH) < 66:
-            raise UnsupportedMTUError("Secure login needs ATT MTU >= 69")
+        # Login writes 66 bytes and receives a 68-byte public-key notification.
+        # Both must fit in one ATT payload; auth fragmentation is unsupported.
+        if self._capacity(AUTH) < 68:
+            raise UnsupportedMTUError("Secure login needs ATT MTU >= 71")
         for uuid in (UPNP, AUTH, WRITE, NOTIFY):
             await self.client.start_notify(
                 uuid, lambda _char, data, uuid=uuid: self._notification(uuid, data)
