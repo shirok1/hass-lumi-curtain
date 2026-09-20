@@ -34,7 +34,7 @@ async def test_login_control_and_notifications(peripheral, session, fragmented):
     result = await session.request(2, get_payload(((2, 6), (2, 3))))
     assert parse_properties(result) == {(2, 6): 50, (2, 3): 0}
     for piid, value in [(1, 1), (1, 2), (1, 0), (2, 40)]:
-        result = await session.request(0, set_payload(piid, value))
+        result = await session.request(0, set_payload((2, piid), value))
         assert parse_properties(result) == {(2, piid): 0}
     peripheral.push(6, 80)
     await asyncio.sleep(0)
@@ -47,7 +47,7 @@ async def test_missing_controls_do_not_discard_public_key(peripheral, session):
     peripheral.controls = False
     with patch("custom_components.lumi_curtain.transport.CONTROL_WAIT", 0.001):
         await session.login(LTMK)
-        await session.request(0, set_payload(1, 0))
+        await session.request(0, set_payload((2, 1), 0))
     assert peripheral.commands == [(1, 0)]
 
 
@@ -74,7 +74,7 @@ async def test_timeout_does_not_resend_motor_command(peripheral, session):
         patch("custom_components.lumi_curtain.transport.TIMEOUT", 0.01),
         pytest.raises(TimeoutError),
     ):
-        await session.request(0, set_payload(1, 1))
+        await session.request(0, set_payload((2, 1), 1))
     assert sum(pt[4] == 0 for pt in peripheral.plaintexts) == 1
     session.on_error.assert_called_once()
 

@@ -17,10 +17,10 @@ from custom_components.lumi_curtain.protocol import (
     [
         (frame(2, 0xF0), "05200200f0"),
         (frame(9, 2, get_payload(((2, 6),))), "092009000201020600"),
-        (frame(10, 0, set_payload(1, 1)), "0c200a000001020100011001"),
-        (frame(11, 0, set_payload(1, 2)), "0c200b000001020100011002"),
-        (frame(10, 0, set_payload(1, 0)), "0c200a000001020100011000"),
-        (frame(12, 0, set_payload(2, 50)), "0c200c000001020200011032"),
+        (frame(10, 0, set_payload((2, 1), 1)), "0c200a000001020100011001"),
+        (frame(11, 0, set_payload((2, 1), 2)), "0c200b000001020100011002"),
+        (frame(10, 0, set_payload((2, 1), 0)), "0c200a000001020100011000"),
+        (frame(12, 0, set_payload((2, 2), 50)), "0c200c000001020200011032"),
     ],
 )
 def test_request_vectors(actual, expected):
@@ -74,7 +74,13 @@ def test_unknown_property_type_and_signed_value():
     assert header(frame(65535, 0xF0)) == (65535, 0xF0)
 
 
-@pytest.mark.parametrize(("piid", "value"), [(1, 3), (2, 101), (2, -1), (6, 50)])
-def test_invalid_commands(piid, value):
+@pytest.mark.parametrize("value", [-1, 256])
+def test_uint8_write_rejects_out_of_range_values(value):
     with pytest.raises(ValueError):
-        set_payload(piid, value)
+        set_payload((2, 1), value)
+
+
+def test_partial_read_and_signed_temperature():
+    # A failed read has only its key and status; the next tuple starts immediately.
+    payload = bytes.fromhex("0305010001000310000000024038ff030b000000011002")
+    assert parse_properties(frame(1, 3, payload)) == {(3, 16): -200, (3, 11): 2}

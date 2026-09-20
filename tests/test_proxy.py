@@ -104,9 +104,13 @@ async def test_cover_through_remote_proxy(hass, enable_bluetooth, entry, periphe
         ):
             assert await hass.config_entries.async_setup(entry.entry_id)
             await hass.async_block_till_done()
-            entity = er.async_entries_for_config_entry(
-                er.async_get(hass), entry.entry_id
-            )[0]
+            entity = next(
+                entity
+                for entity in er.async_entries_for_config_entry(
+                    er.async_get(hass), entry.entry_id
+                )
+                if entity.domain == "cover"
+            )
             await hass.services.async_call(
                 "cover",
                 "set_cover_position",

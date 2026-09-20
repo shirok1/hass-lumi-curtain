@@ -1,4 +1,4 @@
-"""MIOT v2 property codec for HMCN02 curtains."""
+"""MIoT v2 integer property codec, independent of device service definitions."""
 
 import struct
 
@@ -31,15 +31,11 @@ def get_payload(properties: tuple[tuple[int, int], ...]) -> bytes:
     )
 
 
-def set_payload(piid: int, value: int) -> bytes:
-    """Encode the supported uint8 motor or target-position command."""
-    if (
-        (piid == 1 and value not in (0, 1, 2))
-        or (piid == 2 and not 0 <= value <= 100)
-        or piid not in (1, 2)
-    ):
-        raise ValueError("Invalid curtain command")
-    return struct.pack("<BBHHB", 1, 2, piid, 0x1001, value)
+def set_payload(key: tuple[int, int], value: int) -> bytes:
+    """Encode one uint8 property write; the caller validates model constraints."""
+    if not 0 <= value <= 255:
+        raise ValueError("Value is not uint8")
+    return struct.pack("<BBHHB", 1, *key, 0x1001, value)
 
 
 def header(data: bytes) -> tuple[int, int]:
@@ -56,7 +52,7 @@ def header(data: bytes) -> tuple[int, int]:
 
 
 def parse_properties(data: bytes) -> Properties:
-    """Read successful integer properties; reject errors and partial messages."""
+    """Read successful integers; reject failed writes and malformed messages."""
     _, opcode = header(data)
     if opcode not in (1, 3, 4) or len(data) < 6:
         raise ProtocolError("Expected a property response")
@@ -70,6 +66,10 @@ def parse_properties(data: bytes) -> Properties:
                 (code,) = struct.unpack_from("<H", data, offset)
                 offset += 2
                 if code:
+                    if opcode == 3:
+                        # Failed reads contain no value. Other properties in
+                        # this response can still be useful to the caller.
+                        continue
                     raise ProtocolError(f"Property {siid}.{piid} rejected ({code})")
             if opcode == 1:
                 values[siid, piid] = 0
@@ -79,8 +79,7 @@ def parse_properties(data: bytes) -> Properties:
             kind, length = value_header >> 12, value_header & 0xFFF
             if offset + length > len(data):
                 raise ProtocolError("Truncated MIOT value")
-            # The supported curtain properties are uint8. Decode other integer
-            # reports too; unknown/string properties are safely skipped.
+            # Decode signed and unsigned integers; skip unknown/string values.
             sizes = {0: 1, 1: 1, 2: 1, 3: 2, 4: 2, 5: 4, 6: 4, 7: 8, 8: 8}
             if kind in sizes:
                 if length != sizes[kind]:

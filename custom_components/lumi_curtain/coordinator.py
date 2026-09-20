@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, POSITION, READ_PROPERTIES, STATUS
+from .const import DOMAIN
 from .protocol import (
     AuthenticationError,
     Properties,
@@ -26,6 +26,7 @@ from .protocol import (
     parse_properties,
     set_payload,
 )
+from .spec import READ_PROPERTIES, READ_RANGES, STATE_PROPERTIES, STATUS, WRITE_RANGES
 from .transport import RETRY_DELAYS, Session
 
 _LOGGER = logging.getLogger(__name__)
@@ -89,9 +90,7 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
 
     def _merge(self, values: Properties) -> None:
         for key, value in values.items():
-            if (key == POSITION and 0 <= value <= 100) or (
-                key == STATUS and value in (0, 1, 2)
-            ):
+            if value in READ_RANGES.get(key, ()):
                 self._values[key] = value
         self.update_interval = (
             MOVING_INTERVAL if self._values.get(STATUS) in (1, 2) else IDLE_INTERVAL
@@ -185,11 +184,12 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                                 2, get_payload(READ_PROPERTIES)
                             )
                             values = parse_properties(response)
-                            if not all(key in values for key in READ_PROPERTIES):
+                            if not all(key in values for key in STATE_PROPERTIES):
                                 raise ProtocolError("Missing curtain state properties")
-                            if not 0 <= values[POSITION] <= 100 or values[
-                                STATUS
-                            ] not in (0, 1, 2):
+                            if any(
+                                values[key] not in READ_RANGES[key]
+                                for key in STATE_PROPERTIES
+                            ):
                                 raise ProtocolError("Invalid curtain state")
                         except AuthenticationError, UnsupportedMTUError:
                             raise
@@ -215,15 +215,17 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
             finally:
                 self._active_task = None
 
-    async def async_command(self, piid: int, value: int) -> None:
+    async def async_command(self, key: tuple[int, int], value: int) -> None:
         """Send once and require a property ACK, without optimistic position."""
-        payload = set_payload(piid, value)
+        if value not in WRITE_RANGES.get(key, ()):
+            raise ValueError("Invalid curtain command")
+        payload = set_payload(key, value)
         async with self._lock:
             self._active_task = asyncio.current_task()
             try:
                 session = await self._connect()
                 response = parse_properties(await session.request(0, payload))
-                if (2, piid) not in response:
+                if key not in response:
                     raise ProtocolError("Missing command acknowledgement")
             except AuthenticationError as err:
                 await self._disconnect()

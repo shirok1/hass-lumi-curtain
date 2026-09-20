@@ -48,5 +48,31 @@
       "not_connectable": "此蓝牙来源仅支持广播监听，无法连接窗帘。请使用支持主动连接的适配器或代理。"
     },
     "flow_title": "Aqara 窗帘 {suffix}"
+  },
+  "entity": {
+    "sensor": {
+      "battery_level": {
+        "name": "电量"
+      },
+      "charging_state": {
+        "name": "充电状态",
+        "state": {
+          "charging": "充电中",
+          "not_charging": "未充电",
+          "not_chargeable": "不可充电"
+        }
+      },
+      "battery_temperature": {
+        "name": "电池表面温度"
+      },
+      "ambient_light": {
+        "name": "环境光",
+        "state": {
+          "dark": "暗",
+          "bright": "亮",
+          "critical": "临界"
+        }
+      }
+    }
   }
 }

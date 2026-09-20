@@ -212,7 +212,7 @@ async def test_motor_timeout_never_replays(hass, peripheral, ble):
         patch("custom_components.lumi_curtain.transport.TIMEOUT", 0.01),
         pytest.raises(HomeAssistantError),
     ):
-        await coordinator.async_command(1, 1)
+        await coordinator.async_command((2, 1), 1)
     assert sum(pt[4] == 0 for pt in peripheral.plaintexts) == 1
     assert ble[1].await_count == 1
     await coordinator.async_shutdown()

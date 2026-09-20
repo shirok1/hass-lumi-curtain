@@ -8,13 +8,14 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import CONF_LTMK, DEFAULT_NAME, DOMAIN
 from .coordinator import CurtainCoordinator
+from .spec import SENSOR_PROPERTIES
 
 type CurtainConfigEntry = ConfigEntry[CurtainCoordinator]
-PLATFORMS = [Platform.COVER]
+PLATFORMS = [Platform.COVER, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: CurtainConfigEntry) -> bool:
-    """Authenticate and read state before adding the cover."""
+    """Authenticate and read state before adding the cover and sensors."""
     if entry.title == "Lumi Curtain":
         hass.config_entries.async_update_entry(entry, title=DEFAULT_NAME)
     coordinator = CurtainCoordinator(
@@ -25,9 +26,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: CurtainConfigEntry) -> b
             (DOMAIN, entry.data["address"]), entry.entry_id
         )
         entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
-        if (device and device.disabled_by) or (
-            entities and all(entity.disabled_by for entity in entities)
-        ):
+        expected_ids = {entry.unique_id} | {
+            f"{entry.unique_id}_{key}" for key in SENSOR_PROPERTIES
+        }
+        disabled_ids = {entity.unique_id for entity in entities if entity.disabled_by}
+        if (device and device.disabled_by) or (expected_ids <= disabled_ids):
             coordinator.data = {}
             await coordinator.async_shutdown()
         else:

@@ -11,7 +11,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.lumi_curtain import async_unload_entry
-from custom_components.lumi_curtain.const import DOMAIN, POSITION, STATUS
+from custom_components.lumi_curtain.const import DOMAIN
 from custom_components.lumi_curtain.coordinator import (
     IDLE_INTERVAL,
     MOVING_INTERVAL,
@@ -22,6 +22,7 @@ from custom_components.lumi_curtain.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from custom_components.lumi_curtain.protocol import ProtocolError
+from custom_components.lumi_curtain.spec import POSITION, STATUS
 
 from .conftest import ADDRESS, LTMK
 
@@ -31,8 +32,8 @@ async def setup(hass, entry):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
-    assert len(entities) == 1
-    return entities[0].entity_id
+    assert len(entities) == 5
+    return next(entity.entity_id for entity in entities if entity.domain == "cover")
 
 
 async def test_full_cover_lifecycle(hass, entry, peripheral, ble):
@@ -66,7 +67,14 @@ async def test_full_cover_lifecycle(hass, entry, peripheral, ble):
     assert hass.states.get(entity_id).state == "closed"
     assert entry.runtime_data.update_interval == IDLE_INTERVAL
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
-    assert diagnostics["state"] == {"2.6": 0, "2.3": 0}
+    assert diagnostics["state"] == {
+        "2.6": 0,
+        "2.3": 0,
+        "5.1": 69,
+        "5.2": 2,
+        "3.16": 2350,
+        "3.11": 1,
+    }
     assert LTMK.hex() not in str(diagnostics) and ADDRESS not in str(diagnostics)
     coordinator = entry.runtime_data
     await hass.config_entries.async_unload(entry.entry_id)
@@ -112,7 +120,7 @@ async def test_brand_update_preserves_registry_names(hass, entry, ble, title):
         hass.states.get("cover.existing_curtain").attributes["friendly_name"]
         == "落地窗"
     )
-    assert len(er.async_entries_for_config_entry(entities, entry.entry_id)) == 1
+    assert len(er.async_entries_for_config_entry(entities, entry.entry_id)) == 5
     await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -192,7 +200,7 @@ async def test_reauth_on_command(hass, entry, peripheral, ble):
     entry.runtime_data._session.tx_counter = 65520
     peripheral.reject = True
     with pytest.raises(HomeAssistantError, match="rejected LTMK"):
-        await entry.runtime_data.async_command(1, 0)
+        await entry.runtime_data.async_command((2, 1), 0)
     await hass.async_block_till_done()
     assert hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     await hass.config_entries.async_unload(entry.entry_id)
@@ -233,7 +241,7 @@ async def test_missing_command_ack_and_disconnect_failure(hass, entry, periphera
         ),
         pytest.raises(HomeAssistantError),
     ):
-        await entry.runtime_data.async_command(1, 0)
+        await entry.runtime_data.async_command((2, 1), 0)
     await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -245,7 +253,7 @@ async def test_cancellation_releases_connection(hass, entry, peripheral, ble, co
     session.request = AsyncMock(side_effect=asyncio.CancelledError)
     with pytest.raises(asyncio.CancelledError):
         if command:
-            await coordinator.async_command(1, 1)
+            await coordinator.async_command((2, 1), 1)
         else:
             await coordinator._async_update_data()
     assert coordinator._session is None
@@ -267,7 +275,7 @@ async def test_no_entry_auth_failure(hass, peripheral, ble):
     coordinator = CurtainCoordinator(hass, ADDRESS, LTMK.hex())
     peripheral.reject = True
     with pytest.raises(HomeAssistantError):
-        await coordinator.async_command(1, 0)
+        await coordinator.async_command((2, 1), 0)
     await coordinator.async_shutdown()
 
 

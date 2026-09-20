@@ -18,7 +18,57 @@ from .conftest import ADDRESS
 from .test_integration import setup
 
 
-@pytest.mark.parametrize("target", ["entry", "device", "entity"])
+@pytest.mark.parametrize("domain", ["cover", "sensor"])
+async def test_disable_one_entity_keeps_others_connected(
+    hass, entry, peripheral, ble, domain
+):
+    await setup(hass, entry)
+    registry = er.async_get(hass)
+    entities = er.async_entries_for_config_entry(registry, entry.entry_id)
+    entity = next(entity for entity in entities if entity.domain == domain)
+    registry.async_update_entity(
+        entity.entity_id, disabled_by=er.RegistryEntryDisabler.USER
+    )
+    await hass.async_block_till_done()
+    peripheral.client.disconnect.assert_not_awaited()
+    peripheral.push(1, 42, siid=5)
+    peripheral.push(6, 80)
+    await hass.async_block_till_done()
+    assert not entry.runtime_data._stopping
+    assert entry.runtime_data.data[(5, 1)] == 42
+    assert entry.runtime_data.data[(2, 6)] == 80
+    await hass.config_entries.async_unload(entry.entry_id)
+    peripheral.client.disconnect.assert_awaited_once()
+
+
+async def test_upgrade_with_disabled_cover_adds_working_sensors(hass, entry, ble):
+    entry.add_to_hass(hass)
+    er.async_get(hass).async_get_or_create(
+        "cover",
+        DOMAIN,
+        ADDRESS,
+        config_entry=entry,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    ble[1].assert_awaited_once()
+    assert not entry.runtime_data._stopping
+    sensors = [
+        entity
+        for entity in er.async_entries_for_config_entry(
+            er.async_get(hass), entry.entry_id
+        )
+        if entity.domain == "sensor"
+    ]
+    assert len(sensors) == 4
+    assert all(
+        hass.states.get(entity.entity_id).state != "unavailable" for entity in sensors
+    )
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.parametrize("target", ["entry", "device", "all_entities"])
 async def test_disable_reload_enable(hass, entry, peripheral, ble, target):
     entity_id = await setup(hass, entry)
     entities = er.async_get(hass)
@@ -37,9 +87,10 @@ async def test_disable_reload_enable(hass, entry, peripheral, ble, target):
     elif target == "device":
         devices.async_update_device(device_id, disabled_by=dr.DeviceEntryDisabler.USER)
     else:
-        entities.async_update_entity(
-            entity_id, disabled_by=er.RegistryEntryDisabler.USER
-        )
+        for registered in er.async_entries_for_config_entry(entities, entry.entry_id):
+            entities.async_update_entity(
+                registered.entity_id, disabled_by=er.RegistryEntryDisabler.USER
+            )
     await hass.async_block_till_done()
     client.disconnect.assert_awaited_once()
     assert coordinator._session is None
@@ -53,7 +104,8 @@ async def test_disable_reload_enable(hass, entry, peripheral, ble, target):
     elif target == "device":
         devices.async_update_device(device_id, disabled_by=None)
     else:
-        entities.async_update_entity(entity_id, disabled_by=None)
+        for registered in er.async_entries_for_config_entry(entities, entry.entry_id):
+            entities.async_update_entity(registered.entity_id, disabled_by=None)
     await hass.async_block_till_done()
     # HA reloads entries after registry entities are re-enabled.
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
@@ -96,7 +148,7 @@ async def test_disable_cancels_active_work(
     else:
         coordinator._session.request = AsyncMock(side_effect=hang)
     task = asyncio.create_task(
-        coordinator.async_command(1, 0)
+        coordinator.async_command((2, 1), 0)
         if operation == "command"
         else coordinator._async_update_data()
     )

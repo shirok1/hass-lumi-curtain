@@ -75,6 +75,7 @@ class Peripheral:
         self.tx_counter = 0
         self.position = 50
         self.status = 0
+        self.properties = {(5, 1): 69, (5, 2): 2, (3, 16): 2350, (3, 11): 1}
         self.commands = []
         self.plaintexts = []
         self.controls = True
@@ -172,9 +173,15 @@ class Peripheral:
         if op == 0xF0:
             response = bytes.fromhex("0520") + tid + b"\xf0"
         elif op == 2:
-            # Captured v2 get layout; the fake never imports the product codec.
-            payload = bytes.fromhex("030202060000000110") + bytes([self.position])
-            payload += bytes.fromhex("02030000000110") + bytes([self.status])
+            # Encode wire values independently of the integration's spec/codec.
+            values = {**self.properties, (2, 6): self.position, (2, 3): self.status}
+            payload = bytes([3, request[5]])
+            for key in struct.iter_unpack("<BH", request[6:]):
+                payload += struct.pack("<BH", *key)
+                if key not in values:
+                    payload += bytes.fromhex("0100")  # Rejected; no value follows.
+                else:
+                    payload += bytes(2) + self.encode_value(key, values[key])
             response = struct.pack("<H", 0x2000 | (4 + len(payload))) + tid + payload
             if self.get_response is not None:
                 response = self.get_response[:2] + tid + self.get_response[4:]
@@ -211,14 +218,17 @@ class Peripheral:
                 bytes.fromhex("00000200") + struct.pack("<H", counter) + ciphertext,
             )
 
-    def push(self, piid, value, tid=500):
+    @staticmethod
+    def encode_value(key, value):
+        if key == (3, 16):
+            return bytes.fromhex("0240") + struct.pack("<h", value)
+        return bytes.fromhex("0110") + bytes([value])
+
+    def push(self, piid, value, tid=500, *, siid=2):
+        payload = b"\x04\x01" + struct.pack("<BH", siid, piid)
+        payload += self.encode_value((siid, piid), value)
         self.send_plaintext(
-            bytes.fromhex("0c20")
-            + struct.pack("<H", tid)
-            + b"\x04\x01\x02"
-            + struct.pack("<H", piid)
-            + b"\x01\x10"
-            + bytes([value])
+            struct.pack("<HH", 0x2000 | (4 + len(payload)), tid) + payload
         )
 
 

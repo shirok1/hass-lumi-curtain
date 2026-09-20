@@ -48,5 +48,31 @@
       "not_connectable": "This Bluetooth source only receives advertisements. Use an adapter or proxy that supports active connections."
     },
     "flow_title": "Aqara Curtain {suffix}"
+  },
+  "entity": {
+    "sensor": {
+      "battery_level": {
+        "name": "Battery"
+      },
+      "charging_state": {
+        "name": "Charging state",
+        "state": {
+          "charging": "Charging",
+          "not_charging": "Not charging",
+          "not_chargeable": "Not chargeable"
+        }
+      },
+      "battery_temperature": {
+        "name": "Battery temperature"
+      },
+      "ambient_light": {
+        "name": "Ambient light",
+        "state": {
+          "dark": "Dark",
+          "bright": "Bright",
+          "critical": "Critical"
+        }
+      }
+    }
   }
 }

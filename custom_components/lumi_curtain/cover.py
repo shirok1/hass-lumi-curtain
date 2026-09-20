@@ -9,13 +9,11 @@ from homeassistant.components.cover import (
     CoverEntityFeature,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import CurtainConfigEntry
-from .const import DOMAIN, MODEL, POSITION, STATUS
-from .coordinator import CurtainCoordinator
+from .entity import CurtainEntity
+from .spec import MOTOR_CONTROL, POSITION, STATUS, TARGET_POSITION
 
 
 async def async_setup_entry(
@@ -27,10 +25,9 @@ async def async_setup_entry(
     async_add_entities([LumiCurtain(entry)])
 
 
-class LumiCurtain(CoordinatorEntity[CurtainCoordinator], CoverEntity):
+class LumiCurtain(CurtainEntity, CoverEntity):
     """Expose the last confirmed state and the four supported controls."""
 
-    _attr_has_entity_name = True
     _attr_name = None
     _attr_device_class = CoverDeviceClass.CURTAIN
     _attr_supported_features = (
@@ -39,23 +36,6 @@ class LumiCurtain(CoordinatorEntity[CurtainCoordinator], CoverEntity):
         | CoverEntityFeature.STOP
         | CoverEntityFeature.SET_POSITION
     )
-
-    def __init__(self, entry: CurtainConfigEntry) -> None:
-        super().__init__(entry.runtime_data)
-        self._attr_unique_id = entry.unique_id
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.address)},
-            connections={(CONNECTION_BLUETOOTH, self.coordinator.address)},
-            name=entry.title,
-            manufacturer="Aqara",
-            model="Curtain HMCN02",
-            model_id=MODEL,
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Release this curtain's connection when HA disables its only entity."""
-        await super().async_will_remove_from_hass()
-        await self.coordinator.async_shutdown()
 
     @property
     def current_cover_position(self) -> int | None:
@@ -75,13 +55,13 @@ class LumiCurtain(CoordinatorEntity[CurtainCoordinator], CoverEntity):
         return self.coordinator.data.get(STATUS) == 2
 
     async def async_open_cover(self, **kwargs: Any) -> None:
-        await self.coordinator.async_command(1, 1)
+        await self.coordinator.async_command(MOTOR_CONTROL, 1)
 
     async def async_close_cover(self, **kwargs: Any) -> None:
-        await self.coordinator.async_command(1, 2)
+        await self.coordinator.async_command(MOTOR_CONTROL, 2)
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
-        await self.coordinator.async_command(1, 0)
+        await self.coordinator.async_command(MOTOR_CONTROL, 0)
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
-        await self.coordinator.async_command(2, kwargs[ATTR_POSITION])
+        await self.coordinator.async_command(TARGET_POSITION, kwargs[ATTR_POSITION])
