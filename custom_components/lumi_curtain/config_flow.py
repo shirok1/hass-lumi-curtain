@@ -18,6 +18,14 @@ from .const import CONF_LTMK, DEFAULT_NAME, DOMAIN, MIBEACON_UUID, MODEL, PRODUC
 from .coordinator import CurtainCoordinator
 from .protocol import UnsupportedMTUError
 
+LTMK_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_LTMK): TextSelector(
+            TextSelectorConfig(type=TextSelectorType.PASSWORD)
+        ),
+    }
+)
+
 
 class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
     """Validate credentials by logging in and reading the curtain."""
@@ -85,13 +93,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={"address": self._discovered_address},
             data_schema=self.add_suggested_values_to_schema(
-                vol.Schema(
-                    {
-                        vol.Required(CONF_LTMK): TextSelector(
-                            TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                        ),
-                    }
-                ),
+                LTMK_SCHEMA,
                 user_input,
             ),
         )
@@ -124,13 +126,8 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             errors=errors,
             data_schema=self.add_suggested_values_to_schema(
-                vol.Schema(
-                    {
-                        vol.Required(CONF_ADDRESS): str,
-                        vol.Required(CONF_LTMK): TextSelector(
-                            TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                        ),
-                    }
+                vol.Schema({vol.Required(CONF_ADDRESS): str}).extend(
+                    LTMK_SCHEMA.schema
                 ),
                 user_input,
             ),
@@ -179,13 +176,7 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             errors=errors,
             data_schema=self.add_suggested_values_to_schema(
-                vol.Schema(
-                    {
-                        vol.Required(CONF_LTMK): TextSelector(
-                            TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                        ),
-                    }
-                ),
+                LTMK_SCHEMA,
                 user_input,
             ),
         )
