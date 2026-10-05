@@ -160,17 +160,20 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
 
     async def _disconnect(self) -> None:
         self._ready = False
-        session, self._session = self._session, None
-        client, self._client = self._client, None
+        # Keep ownership until teardown finishes so cancellation can retry cleanup.
+        session = self._session
+        client = self._client
         if session:
             # Intentional teardown must not publish an availability error.
             session.on_error = lambda _error: None
             await session.close()
+            self._session = None
         if client:
             try:
                 await client.disconnect()
             except BleakError:
                 _LOGGER.debug("BLE disconnect failed", exc_info=True)
+            self._client = None
 
     async def _async_update_data(self) -> Properties:
         async with self._lock:

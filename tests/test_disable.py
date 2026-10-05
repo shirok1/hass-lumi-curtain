@@ -168,3 +168,52 @@ async def test_disable_cancels_active_work(
         if not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.parametrize("phase", ["session", "client"])
+@pytest.mark.parametrize("operation", ["read", "command"])
+async def test_disable_during_teardown_releases_connection(
+    hass, entry, peripheral, ble, phase, operation
+):
+    await setup(hass, entry)
+    coordinator = entry.runtime_data
+    session = coordinator._session
+    client = peripheral.client
+    started = asyncio.Event()
+    original = session.close if phase == "session" else client.disconnect
+
+    async def delay_first_teardown():
+        if not started.is_set():
+            started.set()
+            await asyncio.Future()
+        await original()
+
+    if phase == "session":
+        session.close = AsyncMock(side_effect=delay_first_teardown)
+    else:
+        client.disconnect = AsyncMock(side_effect=delay_first_teardown)
+    session.tx_counter = 65520  # Re-keying tears down the existing connection.
+    task = asyncio.create_task(
+        coordinator.async_command((2, 1), 0)
+        if operation == "command"
+        else coordinator._async_update_data()
+    )
+    try:
+        async with asyncio.timeout(1):
+            await started.wait()
+            assert await hass.config_entries.async_set_disabled_by(
+                entry.entry_id, ConfigEntryDisabler.USER
+            )
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not client.is_connected
+        assert session._keys == b""
+        assert coordinator._client is None
+        assert coordinator._session is None
+        assert ble[1].await_count == 1
+        assert not peripheral.commands
+    finally:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await coordinator.async_shutdown()
