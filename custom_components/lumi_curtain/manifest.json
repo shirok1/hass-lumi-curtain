@@ -23,7 +23,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/shirok1/hass-lumi-curtain/issues",
   "requirements": [
-    "bleak-retry-connector==4.7.0"
+    "bleak-retry-connector>=4.7.0,<5"
   ],
-  "version": "0.2.0"
+  "version": "0.2.1"
 }
