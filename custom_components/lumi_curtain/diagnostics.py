@@ -20,5 +20,6 @@ async def async_get_config_entry_diagnostics(
         "state": {
             f"{siid}.{piid}": value
             for (siid, piid), value in (coordinator.data or {}).items()
+            if siid != 1
         },
     }

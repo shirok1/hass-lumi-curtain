@@ -1,6 +1,7 @@
 """Real HA setup, cover services, push state, recovery and unload."""
 
 import asyncio
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,6 +10,8 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.lumi_curtain import async_unload_entry
 from custom_components.lumi_curtain.const import DOMAIN
@@ -23,6 +26,7 @@ from custom_components.lumi_curtain.diagnostics import (
 )
 from custom_components.lumi_curtain.protocol import ProtocolError
 from custom_components.lumi_curtain.spec import POSITION, STATUS
+from custom_components.lumi_curtain.transport import REKEY_AT
 
 from .conftest import ADDRESS, LTMK
 
@@ -32,7 +36,7 @@ async def setup(hass, entry):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
-    assert len(entities) == 5
+    assert len(entities) == 14
     return next(entity.entity_id for entity in entities if entity.domain == "cover")
 
 
@@ -120,7 +124,7 @@ async def test_brand_update_preserves_registry_names(hass, entry, ble, title):
         hass.states.get("cover.existing_curtain").attributes["friendly_name"]
         == "落地窗"
     )
-    assert len(er.async_entries_for_config_entry(entities, entry.entry_id)) == 5
+    assert len(er.async_entries_for_config_entry(entities, entry.entry_id)) == 14
     await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -141,14 +145,128 @@ async def test_disconnect_reconnect_and_old_callback(hass, entry, peripheral, bl
     await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_counter_rekeys_before_command(hass, entry, peripheral, ble):
+async def test_disconnect_recovers_on_scheduled_poll(hass, entry, peripheral, ble):
+    entity_id = await setup(hass, entry)
+    await peripheral.disconnect()
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "unavailable"
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert ble[1].await_count == 2
+    assert hass.states.get(entity_id).state == "open"
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.parametrize("reason", ["disconnect", "rekey", "command_error"])
+async def test_reconnect_observes_session_cooldown(
+    hass, entry, peripheral, ble, retry_sleep, reason
+):
+    await setup(hass, entry)
+    coordinator = entry.runtime_data
+    if reason == "disconnect":
+        await peripheral.disconnect()
+        await hass.async_block_till_done()
+    elif reason == "rekey":
+        coordinator._session.tx_counter = REKEY_AT
+    else:
+        peripheral.command_code = 5
+        with pytest.raises(HomeAssistantError):
+            await coordinator.async_command((2, 1), 0)
+
+    retry_sleep[0].reset_mock()
+    await coordinator.async_refresh()
+
+    assert ble[1].await_count == 2
+    retry_sleep[0].assert_awaited_once()
+    assert retry_sleep[0].await_args.args[0] == pytest.approx(20, abs=0.1)
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.parametrize("elapsed", [10, 21])
+async def test_disconnect_cooldown_uses_elapsed_time(
+    hass, entry, peripheral, ble, retry_sleep, elapsed
+):
+    await setup(hass, entry)
+    coordinator = entry.runtime_data
+    await peripheral.disconnect()
+    await hass.async_block_till_done()
+    disconnected_at = coordinator._reconnect_after - 20
+    retry_sleep[0].reset_mock()
+
+    with patch.object(hass.loop, "time", return_value=disconnected_at + elapsed):
+        await coordinator.async_refresh()
+
+    assert ble[1].await_count == 2
+    if elapsed < 20:
+        retry_sleep[0].assert_awaited_once_with(20 - elapsed)
+    else:
+        retry_sleep[0].assert_not_awaited()
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_disconnect_during_session_close_preserves_cooldown(
+    hass, entry, peripheral, ble
+):
+    await setup(hass, entry)
+    coordinator = entry.runtime_data
+    session = coordinator._session
+    client = peripheral.client
+    close = session.close
+
+    async def close_then_drop_link():
+        await close()
+        await peripheral.disconnect()
+
+    session.close = AsyncMock(side_effect=close_then_drop_link)
+    with patch.object(coordinator, "_handle_disconnect") as deferred:
+        await coordinator._disconnect()
+        await hass.async_block_till_done()
+    assert deferred.called
+    # A queued callback can arrive after teardown has relinquished the client.
+    coordinator._handle_disconnect(client)
+    assert coordinator._reconnect_after - hass.loop.time() == pytest.approx(20, abs=0.1)
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_counter_crosses_bit_15_without_reconnecting(
+    hass, entry, peripheral, ble
+):
+    await setup(hass, entry)
+    coordinator = entry.runtime_data
+    session = coordinator._session
+    keys = session._keys
+    session.tx_counter = peripheral.tx_counter = 0x7FFE
+    session.rx_counter = 0x7FFD
+
+    for counter in (0x7FFF, 0x8001, 0x8003):
+        await coordinator.async_refresh()
+        assert coordinator.last_update_success
+        assert session.tx_counter == counter + 1
+        assert session.rx_counter == counter
+        assert coordinator._session is session
+        assert session._keys == keys
+        assert ble[1].await_count == 1
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.parametrize(
+    ("counter", "threshold"),
+    [("tx_counter", REKEY_AT), ("rx_counter", REKEY_AT - 1)],
+)
+async def test_counter_rekeys_before_command(
+    hass, entry, peripheral, ble, counter, threshold
+):
     entity_id = await setup(hass, entry)
     old_session = entry.runtime_data._session
-    old_session.tx_counter = 65520
+    old_keys = old_session._keys
+    setattr(old_session, counter, threshold)
     await hass.services.async_call(
         "cover", "stop_cover", {"entity_id": entity_id}, blocking=True
     )
     assert entry.runtime_data._session is not old_session
+    assert entry.runtime_data._session._keys != old_keys
     assert old_session._keys == b""
     assert ble[1].await_count == 2
     assert peripheral.commands == [(1, 0)]
@@ -196,13 +314,14 @@ async def test_command_rejection_no_retry(hass, entry, peripheral, ble):
 
 
 async def test_reauth_on_command(hass, entry, peripheral, ble):
-    await setup(hass, entry)
-    entry.runtime_data._session.tx_counter = 65520
+    entity_id = await setup(hass, entry)
+    entry.runtime_data._session.tx_counter = REKEY_AT
     peripheral.reject = True
     with pytest.raises(HomeAssistantError, match="rejected LTMK"):
         await entry.runtime_data.async_command((2, 1), 0)
     await hass.async_block_till_done()
     assert hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert hass.states.get(entity_id).state == "unavailable"
     await hass.config_entries.async_unload(entry.entry_id)
 
 

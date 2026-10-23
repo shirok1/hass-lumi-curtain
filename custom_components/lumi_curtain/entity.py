@@ -29,6 +29,7 @@ class CurtainEntity(CoordinatorEntity[CurtainCoordinator]):
             model="Curtain HMCN02",
             model_id=MODEL,
         )
+        self._attr_device_info.update(self.coordinator.device_metadata)
 
     async def async_will_remove_from_hass(self) -> None:
         """HA has already removed this entity's coordinator listener."""

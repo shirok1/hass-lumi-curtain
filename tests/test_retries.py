@@ -52,7 +52,7 @@ async def test_connect_third_attempt_and_concurrent_reuse(
     assert ble[1].await_count == 3
     assert all(c.kwargs["max_attempts"] == 1 for c in ble[1].await_args_list)
     assert retry_sleep[0].await_args_list == [call(2), call(4)]
-    assert len(peripheral.plaintexts) == 3  # One ping and two reads.
+    assert len(peripheral.plaintexts) == 6  # One ping, three initial + two later reads.
     await coordinator.async_shutdown()
 
 
@@ -151,7 +151,7 @@ async def test_failed_read_reconnects_once(hass, peripheral, ble, retry_sleep):
     with patch("custom_components.lumi_curtain.transport.TIMEOUT", 0.01):
         await coordinator.async_refresh()
     assert coordinator.last_update_success
-    assert reads == 2
+    assert reads == 4  # One lost batch, then three batches on the new session.
     assert ble[1].await_count == 2
     retry_sleep[0].assert_awaited_once_with(pytest.approx(20, abs=0.1))
     await coordinator.async_shutdown()

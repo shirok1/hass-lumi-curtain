@@ -6,14 +6,14 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import CurtainConfigEntry
 from .entity import CurtainEntity
-from .spec import CHARGING_STATES, LIGHT_STATES, SENSOR_PROPERTIES
+from .spec import CHARGING_STATES, HOLD_STATES, LIGHT_STATES, SENSOR_PROPERTIES
 
 SENSORS = (
     SensorEntityDescription(
@@ -45,6 +45,25 @@ SENSORS = (
         translation_key="ambient_light",
         device_class=SensorDeviceClass.ENUM,
         options=list(LIGHT_STATES.values()),
+    ),
+    SensorEntityDescription(
+        key="fault",
+        translation_key="fault",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="run_time",
+        translation_key="run_time",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="hold_state",
+        translation_key="hold_state",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(HOLD_STATES.values()),
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
 
@@ -84,4 +103,6 @@ class CurtainSensor(CurtainEntity, SensorEntity):
                 return CHARGING_STATES[value]
             case "ambient_light":
                 return LIGHT_STATES[value]
+            case "hold_state":
+                return HOLD_STATES[value]
         return value

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from asyncio import sleep
+from collections.abc import Callable
 from contextlib import suppress
 from datetime import timedelta
 
@@ -14,19 +15,33 @@ from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
 from .protocol import (
     AuthenticationError,
+    Event,
     Properties,
+    PropertyValues,
     ProtocolError,
     UnsupportedMTUError,
+    action_payload,
     get_payload,
+    parse_action_result,
     parse_properties,
     set_payload,
 )
-from .spec import READ_PROPERTIES, READ_RANGES, STATE_PROPERTIES, STATUS, WRITE_RANGES
+from .spec import (
+    DEVICE_PROPERTIES,
+    IDENTIFY_ACTION,
+    READ_PROPERTIES,
+    READ_RANGES,
+    STATE_PROPERTIES,
+    STATUS,
+    WAKE_UP,
+    WRITE_RANGES,
+)
 from .transport import RETRY_DELAYS, Session
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,6 +80,24 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
         self._stopping = False
         self._reconnect_after = 0.0
         self._values: Properties = {}
+        self.device_properties: dict[tuple[int, int], str] = {}
+        self._metadata_read = False
+        self._event_listeners: set[Callable[[Event], None]] = set()
+
+    @callback
+    def async_subscribe_events(
+        self, listener: Callable[[Event], None]
+    ) -> Callable[[], None]:
+        """Subscribe to future occurrences only, independent of state refreshes."""
+        self._event_listeners.add(listener)
+        return lambda: self._event_listeners.discard(listener)
+
+    @callback
+    def _event_received(self, event: Event) -> None:
+        if self._stopping:
+            return
+        for listener in tuple(self._event_listeners):
+            listener(event)
 
     @callback
     def _disconnected(self, client: BleakClient) -> None:
@@ -84,20 +117,51 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
         self.async_set_update_error(UpdateFailed(str(error)))
 
     @callback
-    def _push(self, values: Properties) -> None:
+    def _push(self, values: PropertyValues) -> None:
         if self._stopping:
             return
         self._merge(values)
         if self._ready:
             self.async_set_updated_data(dict(self._values))
 
-    def _merge(self, values: Properties) -> None:
+    def _merge(self, values: PropertyValues) -> None:
         for key, value in values.items():
-            if value in READ_RANGES.get(key, ()):
+            if key in DEVICE_PROPERTIES and isinstance(value, str) and value:
+                self.device_properties[key] = value
+            elif isinstance(value, int) and value in READ_RANGES.get(key, ()):
                 self._values[key] = value
+        if self.config_entry and any(key in DEVICE_PROPERTIES for key in values):
+            registry = dr.async_get(self.hass)
+            if device := registry.async_get_device(
+                identifiers={(DOMAIN, self.address)}
+            ):
+                registry.async_update_device(
+                    device.id,
+                    manufacturer=self.device_properties.get(
+                        (1, 1), device.manufacturer
+                    ),
+                    model=self.device_properties.get((1, 2), device.model),
+                    serial_number=self.device_properties.get(
+                        (1, 3), device.serial_number
+                    ),
+                    sw_version=self.device_properties.get((1, 4), device.sw_version),
+                )
         self.update_interval = (
             MOVING_INTERVAL if self._values.get(STATUS) in (1, 2) else IDLE_INTERVAL
         )
+
+    @property
+    def device_metadata(self) -> dict[str, str]:
+        """Known device identity, separate from published operating state."""
+        return {
+            field: self.device_properties[key]
+            for key, field in zip(
+                DEVICE_PROPERTIES,
+                ("manufacturer", "model", "serial_number", "sw_version"),
+                strict=True,
+            )
+            if key in self.device_properties
+        }
 
     async def _connect(self) -> Session:
         if self._stopping:
@@ -148,10 +212,14 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                             ),
                         )
                     self._session = Session(
-                        self._client, self._push, self._session_error
+                        self._client,
+                        self._push,
+                        self._session_error,
+                        self._event_received,
                     )
                     await self._session.login(self._ltmk)
                     self._values = {}
+                    self._metadata_read = False
                     return self._session
                 except AuthenticationError, UnsupportedMTUError:
                     raise
@@ -196,10 +264,15 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                     for attempt in range(2):
                         session = await self._connect()
                         try:
-                            response = await session.request(
-                                2, get_payload(READ_PROPERTIES)
+                            requested = READ_PROPERTIES + (
+                                () if self._metadata_read else DEVICE_PROPERTIES
                             )
-                            values = parse_properties(response)
+                            values: PropertyValues = {}
+                            for offset in range(0, len(requested), 6):
+                                response = await session.request(
+                                    2, get_payload(requested[offset : offset + 6])
+                                )
+                                values.update(parse_properties(response))
                             if not all(key in values for key in STATE_PROPERTIES):
                                 raise ProtocolError("Missing curtain state properties")
                             if any(
@@ -215,6 +288,7 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                             await self._disconnect()
                             continue
                         self._ready = True
+                        self._metadata_read = True
                         return dict(self._values)
                 raise ProtocolError("State read attempts exhausted")
             except AuthenticationError as err:
@@ -230,17 +304,33 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
             finally:
                 self._active_task = None
 
-    async def async_command(self, key: tuple[int, int], value: int) -> None:
+    async def async_command(self, key: tuple[int, int], value: int | bool) -> None:
         """Send once and require a property ACK, without optimistic position."""
         if value not in WRITE_RANGES.get(key, ()):
             raise ValueError("Invalid curtain command")
+        if key == WAKE_UP and value is not True:
+            raise ValueError("Wake-up requires a boolean trigger")
         payload = set_payload(key, value)
+        await self._async_control(0, payload, key)
+
+    async def async_action(self, key: tuple[int, int]) -> None:
+        """Invoke the supported output-free action once."""
+        if key != IDENTIFY_ACTION:
+            raise ValueError("Unsupported curtain action")
+        await self._async_control(5, action_payload(key))
+
+    async def _async_control(
+        self, opcode: int, payload: bytes, key: tuple[int, int] | None = None
+    ) -> None:
+        """Serialize controls and never replay an ambiguous result."""
         async with self._lock:
             self._active_task = asyncio.current_task()
             try:
                 session = await self._connect()
-                response = parse_properties(await session.request(0, payload))
-                if key not in response:
+                response = await session.request(opcode, payload)
+                if opcode == 5:
+                    parse_action_result(response)
+                elif key not in parse_properties(response):
                     raise ProtocolError("Missing command acknowledgement")
             except AuthenticationError as err:
                 self._session_error(err)
@@ -266,6 +356,7 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
     async def async_shutdown(self) -> None:
         """Stop HA refresh timers and release the BLE connection."""
         self._stopping = True
+        self._event_listeners.clear()
         await super().async_shutdown()
         if (task := self._active_task) and task is not asyncio.current_task():
             self._active_task = None

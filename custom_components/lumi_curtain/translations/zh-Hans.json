@@ -72,6 +72,75 @@
           "bright": "亮",
           "critical": "临界"
         }
+      },
+      "fault": {
+        "name": "故障代码"
+      },
+      "run_time": {
+        "name": "运行时间"
+      },
+      "hold_state": {
+        "name": "抱紧状态",
+        "state": {
+          "unlocked": "已松开",
+          "locked": "已抱紧",
+          "locking": "抱紧中",
+          "unlocking": "松开中"
+        }
+      }
+    },
+    "switch": {
+      "manual_start": {
+        "name": "手拉启动"
+      }
+    },
+    "button": {
+      "wake_up": {
+        "name": "开始起床唤醒"
+      },
+      "identify": {
+        "name": "识别"
+      }
+    },
+    "event": {
+      "manual_operation": {
+        "name": "手动操作",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "opened": "手动打开",
+              "closed": "手动关闭"
+            }
+          }
+        }
+      },
+      "battery_alert": {
+        "name": "电池提醒",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "low_battery": "电量低",
+              "critical_battery": "电量极低",
+              "low_battery_automation": "低电量自动化",
+              "discharge_temperature_normal": "放电温度恢复正常",
+              "discharge_overtemperature": "放电温度过高",
+              "discharge_undertemperature": "放电温度过低",
+              "charge_overtemperature": "充电温度过高",
+              "charge_undertemperature": "充电温度过低"
+            }
+          }
+        }
+      },
+      "device_event": {
+        "name": "设备事件",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "factory_reset": "恢复出厂设置",
+              "error": "异常"
+            }
+          }
+        }
       }
     }
   }

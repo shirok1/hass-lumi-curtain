@@ -17,11 +17,13 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from .protocol import (
     AuthenticationError,
-    Properties,
+    Event,
+    PropertyValues,
     ProtocolError,
     UnsupportedMTUError,
     frame,
     header,
+    parse_event,
     parse_properties,
 )
 
@@ -63,12 +65,14 @@ class Session:
     def __init__(
         self,
         client: BleakClient,
-        on_properties: Callable[[Properties], None],
+        on_properties: Callable[[PropertyValues], None],
         on_error: Callable[[Exception], None],
+        on_event: Callable[[Event], None] | None = None,
     ) -> None:
         self.client = client
         self.on_properties = on_properties
         self.on_error = on_error
+        self.on_event = on_event
         self.tx_counter = 0
         self.rx_counter = -1
         self._att_capacity = 0
@@ -321,7 +325,11 @@ class Session:
                     self.rx_counter = counter
                     tid, opcode = header(plaintext)
                     pending = self._pending
-                    if pending and (tid, opcode) == pending[:2]:
+                    if opcode == 7:
+                        event = parse_event(plaintext)
+                        if self.on_event is not None:
+                            self.on_event(event)
+                    elif pending and (tid, opcode) == pending[:2]:
                         if opcode == 3:
                             # Merge reports in wire order, before a newer push
                             # can arrive while the request waiter is waking up.

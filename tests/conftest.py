@@ -77,6 +77,9 @@ class Peripheral:
         self.status = 0
         self.properties = {(5, 1): 69, (5, 2): 2, (3, 16): 2350, (3, 11): 1}
         self.commands = []
+        self.property_writes = []
+        self.actions = []
+        self.action_code = 0
         self.plaintexts = []
         self.controls = True
         self.fragmented = False
@@ -185,16 +188,29 @@ class Peripheral:
             response = struct.pack("<H", 0x2000 | (4 + len(payload))) + tid + payload
             if self.get_response is not None:
                 response = self.get_response[:2] + tid + self.get_response[4:]
+        elif op == 5:
+            assert len(request) == 8 and request[7] == 0
+            self.actions.append(tuple(request[5:7]))
+            response = bytes.fromhex("0720") + tid + b"\x06"
+            response += struct.pack("<H", self.action_code)
         else:
+            assert op == 0
             piid, value = int.from_bytes(request[7:9], "little"), request[11]
-            self.commands.append((piid, value))
+            siid = request[6]
+            self.property_writes.append(
+                ((siid, piid), value, int.from_bytes(request[9:11], "little"))
+            )
+            if siid == 2 and piid in (1, 2):
+                self.commands.append((piid, value))
             if not self.command_code:
-                if piid == 1:
+                if (siid, piid) == (2, 1):
                     self.status = value
-                else:
+                elif (siid, piid) == (2, 2):
                     self.position = value
+                else:
+                    self.properties[siid, piid] = value
             # The device's motor ACK declares 12 but contains 11 bytes.
-            response = bytes.fromhex("0c20") + tid + b"\x01\x01\x02"
+            response = bytes.fromhex("0c20") + tid + bytes([1, 1, siid])
             response += struct.pack("<HH", piid, self.command_code)
         self.send_plaintext(response)
 
@@ -202,7 +218,9 @@ class Peripheral:
         counter = self.tx_counter
         self.tx_counter += 1
         ciphertext = AESCCM(self.keys[:16], tag_length=4).encrypt(
-            self.keys[32:36] + bytes(4) + struct.pack("<I", counter), plaintext, None
+            self.keys[32:36] + bytes(4) + struct.pack("<I", counter),
+            plaintext,
+            None,
         )
         if self.fragmented:
             chunks = [ciphertext[i : i + 10] for i in range(0, len(ciphertext), 10)]
@@ -220,6 +238,9 @@ class Peripheral:
 
     @staticmethod
     def encode_value(key, value):
+        if isinstance(value, str):
+            raw = value.encode("utf-8")
+            return struct.pack("<H", 0xA000 | len(raw)) + raw
         if key == (3, 16):
             return bytes.fromhex("0240") + struct.pack("<h", value)
         return bytes.fromhex("0110") + bytes([value])

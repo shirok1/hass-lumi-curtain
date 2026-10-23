@@ -8,10 +8,16 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import CONF_LTMK, DEFAULT_NAME, DOMAIN
 from .coordinator import CurtainCoordinator
-from .spec import SENSOR_PROPERTIES
+from .spec import BUTTON_KEYS, EVENT_TYPES, SENSOR_PROPERTIES, SWITCH_PROPERTIES
 
 type CurtainConfigEntry = ConfigEntry[CurtainCoordinator]
-PLATFORMS = [Platform.COVER, Platform.SENSOR]
+PLATFORMS = [
+    Platform.COVER,
+    Platform.SENSOR,
+    Platform.BUTTON,
+    Platform.SWITCH,
+    Platform.EVENT,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: CurtainConfigEntry) -> bool:
@@ -27,7 +33,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: CurtainConfigEntry) -> b
         )
         entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
         expected_ids = {entry.unique_id} | {
-            f"{entry.unique_id}_{key}" for key in SENSOR_PROPERTIES
+            f"{entry.unique_id}_{key}"
+            for key in (
+                *SENSOR_PROPERTIES,
+                *SWITCH_PROPERTIES,
+                *BUTTON_KEYS,
+                *EVENT_TYPES,
+            )
         }
         disabled_ids = {entity.unique_id for entity in entities if entity.disabled_by}
         if (device and device.disabled_by) or (expected_ids <= disabled_ids):

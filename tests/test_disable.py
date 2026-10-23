@@ -13,12 +13,13 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.lumi_curtain.const import DOMAIN
+from custom_components.lumi_curtain.transport import REKEY_AT
 
 from .conftest import ADDRESS
 from .test_integration import setup
 
 
-@pytest.mark.parametrize("domain", ["cover", "sensor"])
+@pytest.mark.parametrize("domain", ["cover", "sensor", "event"])
 async def test_disable_one_entity_keeps_others_connected(
     hass, entry, peripheral, ble, domain
 ):
@@ -61,10 +62,11 @@ async def test_upgrade_with_disabled_cover_adds_working_sensors(hass, entry, ble
         )
         if entity.domain == "sensor"
     ]
-    assert len(sensors) == 4
-    assert all(
-        hass.states.get(entity.entity_id).state != "unavailable" for entity in sensors
-    )
+    assert len(sensors) == 7
+    optional_ids = {f"{ADDRESS}_{key}" for key in ("fault", "run_time", "hold_state")}
+    for entity in sensors:
+        available = hass.states.get(entity.entity_id).state != "unavailable"
+        assert available == (entity.unique_id not in optional_ids)
     await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -192,7 +194,7 @@ async def test_disable_during_teardown_releases_connection(
         session.close = AsyncMock(side_effect=delay_first_teardown)
     else:
         client.disconnect = AsyncMock(side_effect=delay_first_teardown)
-    session.tx_counter = 65520  # Re-keying tears down the existing connection.
+    session.tx_counter = REKEY_AT  # Re-keying tears down the existing connection.
     task = asyncio.create_task(
         coordinator.async_command((2, 1), 0)
         if operation == "command"

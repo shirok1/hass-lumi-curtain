@@ -72,6 +72,75 @@
           "bright": "Bright",
           "critical": "Critical"
         }
+      },
+      "fault": {
+        "name": "Fault code"
+      },
+      "run_time": {
+        "name": "Run time"
+      },
+      "hold_state": {
+        "name": "Mounting state",
+        "state": {
+          "unlocked": "Released",
+          "locked": "Clamped",
+          "locking": "Clamping",
+          "unlocking": "Releasing"
+        }
+      }
+    },
+    "switch": {
+      "manual_start": {
+        "name": "Manual start"
+      }
+    },
+    "button": {
+      "wake_up": {
+        "name": "Start wake-up"
+      },
+      "identify": {
+        "name": "Identify"
+      }
+    },
+    "event": {
+      "manual_operation": {
+        "name": "Manual operation",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "opened": "Opened",
+              "closed": "Closed"
+            }
+          }
+        }
+      },
+      "battery_alert": {
+        "name": "Battery alert",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "low_battery": "Low battery",
+              "critical_battery": "Critically low battery",
+              "low_battery_automation": "Low battery automation",
+              "discharge_temperature_normal": "Discharge temperature normal",
+              "discharge_overtemperature": "Discharge temperature too high",
+              "discharge_undertemperature": "Discharge temperature too low",
+              "charge_overtemperature": "Charge temperature too high",
+              "charge_undertemperature": "Charge temperature too low"
+            }
+          }
+        }
+      },
+      "device_event": {
+        "name": "Device event",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "factory_reset": "Factory reset",
+              "error": "Error"
+            }
+          }
+        }
       }
     }
   }

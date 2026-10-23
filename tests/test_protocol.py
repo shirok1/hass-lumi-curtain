@@ -65,7 +65,7 @@ def test_malformed_frames(raw):
 
 
 def test_unknown_property_type_and_signed_value():
-    assert parse_properties(frame(1, 4, bytes.fromhex("0102060001a041"))) == {}
+    assert parse_properties(frame(1, 4, bytes.fromhex("0102060001b041"))) == {}
     assert parse_properties(frame(1, 4, bytes.fromhex("010206000120ff"))) == {
         (2, 6): -1
     }
