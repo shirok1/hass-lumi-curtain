@@ -130,7 +130,7 @@ async def test_disconnect_during_auth_cools_down_and_reconnects(
     await coordinator.async_refresh()
     assert coordinator.last_update_success
     assert ble[1].await_count == 2
-    retry_sleep[0].assert_awaited_once_with(20)
+    retry_sleep[0].assert_awaited_once_with(pytest.approx(20, abs=0.1))
     await coordinator.async_shutdown()
 
 
@@ -153,7 +153,26 @@ async def test_failed_read_reconnects_once(hass, peripheral, ble, retry_sleep):
     assert coordinator.last_update_success
     assert reads == 2
     assert ble[1].await_count == 2
-    retry_sleep[0].assert_awaited_once_with(20)
+    retry_sleep[0].assert_awaited_once_with(pytest.approx(20, abs=0.1))
+    await coordinator.async_shutdown()
+
+
+async def test_final_login_failure_preserves_cooldown_for_next_refresh(
+    hass, ble, retry_sleep
+):
+    coordinator = CurtainCoordinator(hass, ADDRESS, LTMK.hex())
+    with patch.object(Session, "login", side_effect=ProtocolError("Busy")):
+        await coordinator.async_refresh()
+    assert not coordinator.last_update_success
+    assert ble[1].await_count == 3
+    assert retry_sleep[0].await_count == 2
+
+    retry_sleep[0].reset_mock()
+    await coordinator.async_refresh()
+
+    assert coordinator.last_update_success
+    assert ble[1].await_count == 4
+    retry_sleep[0].assert_awaited_once_with(pytest.approx(20, abs=0.1))
     await coordinator.async_shutdown()
 
 

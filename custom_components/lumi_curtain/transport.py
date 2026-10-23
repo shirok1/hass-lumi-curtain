@@ -33,13 +33,13 @@ VENDOR = "0000001c-0000-1000-8000-00805f9b34fb"
 READY = bytes.fromhex("00000101")
 OK = bytes.fromhex("00000100")
 ACK = bytes.fromhex("00000300")
-TIMEOUT = 10
-CONTROL_WAIT = 0.6
+TIMEOUT = 30
+CONTROL_WAIT = 6
 RETRY_DELAYS = (2, 4)
-LOGIN_TIMEOUT = 8
+LOGIN_TIMEOUT = 60
 SUBSCRIBE_TIMEOUT = 5
-# Re-key before either 16-bit wire counter wraps, including a margin for pushes.
-REKEY_AT = 0xFFF0
+# Keep one session across bit 15; re-key before the 16-bit wire counter wraps.
+REKEY_AT = 0x10000
 
 
 def derive_keys(shared: bytes, ltmk: bytes) -> bytes:
@@ -53,7 +53,7 @@ def derive_keys(shared: bytes, ltmk: bytes) -> bytes:
 
 
 def nonce(iv: bytes, counter: int) -> bytes:
-    """Build the 12-byte AES-CCM nonce; never wrap a counter."""
+    """Build the device SDK nonce with an unsigned 32-bit little-endian counter."""
     return iv + bytes(4) + counter.to_bytes(4, "little")
 
 
@@ -71,6 +71,7 @@ class Session:
         self.on_error = on_error
         self.tx_counter = 0
         self.rx_counter = -1
+        self._att_capacity = 0
         self._keys = b""
         self._tid = 0
         self._queues: dict[str, asyncio.Queue[bytes | Exception]] = {
@@ -98,7 +99,7 @@ class Session:
     @property
     def needs_rekey(self) -> bool:
         """Re-establish the session before nonce reuse is possible."""
-        return max(self.tx_counter, self.rx_counter) >= REKEY_AT
+        return self.tx_counter >= REKEY_AT or self.rx_counter >= REKEY_AT - 1
 
     def fail(self, error: Exception) -> None:
         """Wake requests immediately after disconnect or invalid ciphertext."""
@@ -155,7 +156,7 @@ class Session:
         await self.client.write_gatt_char(uuid, data, response=response)
 
     async def _expect(self, uuid: str, expected: bytes) -> None:
-        # Allow missing control responses after 600 ms. Keep protocol data
+        # Match Mi Home's six-second control budget. Keep protocol data
         # in a separate queue so an early public key cannot be discarded here.
         with suppress(TimeoutError):
             async with asyncio.timeout(CONTROL_WAIT):
@@ -167,8 +168,10 @@ class Session:
         if char is None:
             raise ProtocolError("Missing curtain GATT characteristic")
         if "write-without-response" in char.properties:
-            return char.max_write_without_response_size
-        return self.client.mtu_size - 3
+            capacity = char.max_write_without_response_size
+        else:
+            capacity = self.client.mtu_size - 3
+        return max(capacity, self._att_capacity) if capacity == 20 else capacity
 
     async def login(self, ltmk: bytes) -> None:
         """Run the greeting and CMD 0x50 mesh secure login."""
@@ -176,7 +179,10 @@ class Session:
             raise ValueError("LTMK must contain 32 bytes")
         # Login writes 66 bytes and receives a 68-byte public-key notification.
         # Both must fit in one ATT payload; auth fragmentation is unsupported.
-        if self._capacity(AUTH) < 68:
+        capacity = self._capacity(AUTH)
+        # BlueZ can retain its unknown/default 20-byte capacity after connecting.
+        # Let the greeting establish the actual AUTH payload size in that case.
+        if capacity != 20 and capacity < 68:
             raise UnsupportedMTUError("Secure login needs ATT MTU >= 71")
         for uuid in (UPNP, AUTH, WRITE, NOTIFY):
             for attempt in range(3):
@@ -229,6 +235,19 @@ class Session:
             if not challenge.startswith(b"\x00\x00\x04"):
                 raise ProtocolError("Invalid greeting challenge")
             await self._write(AUTH, b"\x00\x00\x05" + challenge[3:])
+        if (
+            challenge[:4] == bytes.fromhex("00000401")
+            and len(challenge) >= 68
+            and len(challenge) == challenge[4] + 2
+            and challenge[4:] == bytes([challenge[4]]) * (challenge[4] - 2)
+        ):
+            # The full challenge and its successful echo establish an ATT
+            # payload lower bound for this connection, despite stale BlueZ data.
+            self._att_capacity = len(challenge)
+        if self._capacity(AUTH) < 68:
+            raise UnsupportedMTUError("Secure login needs ATT MTU >= 71")
+        # The OEM waits after the second echo before starting secure login.
+        await sleep(0.1)
         private = ec.generate_private_key(ec.SECP256R1())
         public = private.public_key().public_bytes(
             serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint

@@ -63,6 +63,7 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
         self._active_task: asyncio.Task | None = None
         self._ready = False
         self._stopping = False
+        self._reconnect_after = 0.0
         self._values: Properties = {}
 
     @callback
@@ -71,8 +72,10 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
 
     @callback
     def _handle_disconnect(self, client: BleakClient) -> None:
-        if client is self._client and self._session:
-            self._session.fail(BleakError("Curtain disconnected"))
+        if client is self._client:
+            self._reconnect_after = self.hass.loop.time() + AUTH_COOLDOWN
+            if self._session:
+                self._session.fail(BleakError("Curtain disconnected"))
 
     @callback
     def _session_error(self, error: Exception) -> None:
@@ -112,6 +115,9 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                 if self._stopping:
                     raise ProtocolError("Integration is unloading")
                 await self._disconnect()
+                if (delay := self._reconnect_after - self.hass.loop.time()) > 0:
+                    _LOGGER.debug("Waiting %.1f s before reconnecting", delay)
+                    await sleep(delay)
                 try:
                     async with asyncio.timeout(CONNECT_TIMEOUT):
                         device = bluetooth.async_ble_device_from_address(
@@ -150,12 +156,16 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                 except AuthenticationError, UnsupportedMTUError:
                     raise
                 except ProtocolError, BleakError, TimeoutError:
-                    delay = AUTH_COOLDOWN if self._client else RETRY_DELAYS[attempt % 2]
+                    had_client = self._client is not None
                     await self._disconnect()
                     if attempt == 2 or self._stopping:
                         raise
-                    _LOGGER.debug("Connection setup failed; retrying after %s s", delay)
-                    await sleep(delay)
+                    if not had_client:
+                        delay = RETRY_DELAYS[attempt % 2]
+                        _LOGGER.debug(
+                            "Connection setup failed; retrying after %s s", delay
+                        )
+                        await sleep(delay)
         raise ProtocolError("Connection attempts exhausted")
 
     async def _disconnect(self) -> None:
@@ -163,6 +173,7 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
         # Keep ownership until teardown finishes so cancellation can retry cleanup.
         session = self._session
         client = self._client
+        was_connected = client is not None and client.is_connected
         if session:
             # Intentional teardown must not publish an availability error.
             session.on_error = lambda _error: None
@@ -173,6 +184,8 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                 await client.disconnect()
             except BleakError:
                 _LOGGER.debug("BLE disconnect failed", exc_info=True)
+            if was_connected:
+                self._reconnect_after = self.hass.loop.time() + AUTH_COOLDOWN
             self._client = None
 
     async def _async_update_data(self) -> Properties:
@@ -200,7 +213,6 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                             if attempt or self._stopping:
                                 raise
                             await self._disconnect()
-                            await sleep(AUTH_COOLDOWN)
                             continue
                         self._ready = True
                         return dict(self._values)
@@ -231,6 +243,7 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
                 if key not in response:
                     raise ProtocolError("Missing command acknowledgement")
             except AuthenticationError as err:
+                self._session_error(err)
                 await self._disconnect()
                 if self.config_entry:
                     self.config_entry.async_start_reauth(self.hass)
