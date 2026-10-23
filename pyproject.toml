@@ -1,6 +1,6 @@
 [project]
 name = "hass-lumi-curtain"
-version = "0.2.1"
+version = "0.3.0"
 description = "Local BLE control of lumi.curtain.hmcn02 for Home Assistant"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
