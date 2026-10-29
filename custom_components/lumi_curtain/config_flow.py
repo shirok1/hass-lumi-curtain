@@ -338,10 +338,6 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._cloud_data = {CONF_ADDRESS: address, CONF_LTMK: key}
                 self._clear_cloud()
                 return await self.async_step_cloud_confirm()
-        options = {
-            did: f"{device.get('name', DEFAULT_NAME)} ({device['mac']})"
-            for did, device in self._devices.items()
-        }
         return self.async_show_form(
             step_id="cloud_device",
             errors=errors,
@@ -350,8 +346,14 @@ class LumiCurtainConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required("device"): SelectSelector(
                         SelectSelectorConfig(
                             options=[
-                                {"value": did, "label": label}
-                                for did, label in options.items()
+                                {
+                                    "value": did,
+                                    "label": (
+                                        f"{device.get('name', DEFAULT_NAME)} "
+                                        f"({device['mac']})"
+                                    ),
+                                }
+                                for did, device in self._devices.items()
                             ],
                             mode=SelectSelectorMode.DROPDOWN,
                         )

@@ -21,7 +21,6 @@ QR = cloud.QRLogin(
     "",
     "https://account.xiaomi.com/poll",
     300,
-    "device",
 )
 
 
@@ -72,7 +71,8 @@ async def test_qr_login_success_and_no_credentials_in_repr():
         cast(Session, session).requests[0][1]["headers"]["User-Agent"] == qr.user_agent
     )
     assert qr.timeout_seconds == 300
-    assert qr.cookies["deviceId"] == qr.device_id
+    assert qr.cookies == cast(Session, session).requests[0][1]["cookies"]
+    assert len(qr.cookies["deviceId"]) == 16
     assert qr.qr_image_url not in repr(qr)
     session = http_session(
         Response(

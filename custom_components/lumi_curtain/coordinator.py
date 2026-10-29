@@ -135,16 +135,13 @@ class CurtainCoordinator(DataUpdateCoordinator[Properties]):
             if device := registry.async_get_device(
                 identifiers={(DOMAIN, self.address)}
             ):
+                metadata = self.device_metadata
                 registry.async_update_device(
                     device.id,
-                    manufacturer=self.device_properties.get(
-                        (1, 1), device.manufacturer
-                    ),
-                    model=self.device_properties.get((1, 2), device.model),
-                    serial_number=self.device_properties.get(
-                        (1, 3), device.serial_number
-                    ),
-                    sw_version=self.device_properties.get((1, 4), device.sw_version),
+                    manufacturer=metadata.get("manufacturer", device.manufacturer),
+                    model=metadata.get("model", device.model),
+                    serial_number=metadata.get("serial_number", device.serial_number),
+                    sw_version=metadata.get("sw_version", device.sw_version),
                 )
         self.update_interval = (
             MOVING_INTERVAL if self._values.get(STATUS) in (1, 2) else IDLE_INTERVAL

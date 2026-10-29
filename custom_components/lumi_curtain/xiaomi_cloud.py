@@ -102,7 +102,6 @@ class QRLogin:
     login_url: str
     lp_url: str
     timeout_seconds: int
-    device_id: str
     cookies: dict[str, str] = field(default_factory=dict)
     user_agent: str = field(default_factory=_fresh_user_agent, compare=False)
 
@@ -173,7 +172,6 @@ async def start_qr_login(session: aiohttp.ClientSession) -> QRLogin:
             login_url=_https_url(login_url) if login_url != "" else "",
             lp_url=_https_url(data["lp"]),
             timeout_seconds=min(timeout, 600),
-            device_id=device_id,
             cookies=cookies,
             user_agent=headers["User-Agent"],
         )
