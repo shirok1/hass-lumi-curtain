@@ -5,6 +5,8 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.service import async_register_platform_entity_service
+from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_LTMK, DEFAULT_NAME, DOMAIN
 from .coordinator import CurtainCoordinator
@@ -18,6 +20,19 @@ PLATFORMS = [
     Platform.SWITCH,
     Platform.EVENT,
 ]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register native target selection for the curtain wake-up action."""
+    async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "wake_up",
+        entity_domain=Platform.COVER,
+        schema={},
+        func="async_wake_up",
+    )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: CurtainConfigEntry) -> bool:

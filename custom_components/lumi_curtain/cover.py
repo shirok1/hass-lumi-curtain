@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import CurtainConfigEntry
 from .entity import CurtainEntity
-from .spec import MOTOR_CONTROL, POSITION, STATUS, TARGET_POSITION
+from .spec import MOTOR_CONTROL, POSITION, STATUS, TARGET_POSITION, WAKE_UP
 
 
 async def async_setup_entry(
@@ -65,3 +65,7 @@ class LumiCurtain(CurtainEntity, CoverEntity):
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         await self.coordinator.async_command(TARGET_POSITION, kwargs[ATTR_POSITION])
+
+    async def async_wake_up(self) -> None:
+        """Start the curtain's native gradual wake-up program."""
+        await self.coordinator.async_command(WAKE_UP, True)

@@ -216,5 +216,11 @@
         "i2": "India (i2)"
       }
     }
+  },
+  "services": {
+    "wake_up": {
+      "name": "Start wake-up",
+      "description": "Gradually open the selected curtains."
+    }
   }
 }

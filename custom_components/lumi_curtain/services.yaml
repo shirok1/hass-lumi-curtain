@@ -1,0 +1,7 @@
+wake_up:
+  name: Start wake-up
+  description: Gradually open the selected curtains.
+  target:
+    entity:
+      - integration: lumi_curtain
+        domain: cover
