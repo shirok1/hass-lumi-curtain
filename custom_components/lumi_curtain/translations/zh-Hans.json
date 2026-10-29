@@ -2,36 +2,86 @@
   "title": "Aqara 蓝牙窗帘",
   "config": {
     "step": {
-      "user": {
-        "title": "连接 Aqara 窗帘",
-        "description": "连接 Aqara HMCN02 蓝牙窗帘。请关闭米家及其他正在连接窗帘的应用，然后输入蓝牙地址和 32 字节 LTMK。支持本机蓝牙适配器和已启用主动连接的蓝牙代理。",
+      "manual": {
+        "title": "手动配置",
+        "description": "请先关闭米家及其他连接窗帘的应用。",
         "data": {
           "address": "蓝牙地址",
-          "ltmk": "LTMK（32 字节）"
+          "ltmk": "加密密钥 (LTMK)"
         },
         "data_description": {
-          "ltmk": "64 个十六进制字符，不是米家 BLE token 或 bindkey。"
-        }
+          "ltmk": "64 个十六进制字符，不是 token 或 bindkey。"
+        },
+        "submit": "连接"
       },
-      "reauth_confirm": {
-        "title": "更新窗帘凭据",
-        "description": "窗帘拒绝了已保存的 LTMK。请输入当前的 32 字节 LTMK。",
+      "bluetooth_manual": {
+        "description": "请先关闭米家及其他连接窗帘的应用。",
         "data": {
-          "ltmk": "LTMK（32 字节）"
+          "ltmk": "加密密钥 (LTMK)"
         },
         "data_description": {
-          "ltmk": "64 个十六进制字符，不是米家 BLE token 或 bindkey。"
+          "ltmk": "64 个十六进制字符，不是 token 或 bindkey。"
+        },
+        "submit": "连接"
+      },
+      "reauth_manual": {
+        "title": "更新密钥",
+        "data": {
+          "ltmk": "加密密钥 (LTMK)"
+        },
+        "data_description": {
+          "ltmk": "64 个十六进制字符，不是 token 或 bindkey。"
+        },
+        "submit": "连接"
+      },
+      "user": {
+        "title": "添加窗帘",
+        "menu_options": {
+          "cloud": "米家账号",
+          "manual": "手动输入密钥"
         }
       },
       "bluetooth_confirm": {
-        "title": "连接 Aqara 窗帘",
-        "description": "已发现 Aqara 窗帘（{address}）。请关闭米家及其他正在连接窗帘的应用，然后输入 32 字节 LTMK。",
-        "data": {
-          "ltmk": "LTMK（32 字节）"
-        },
-        "data_description": {
-          "ltmk": "64 个十六进制字符，不是米家 BLE token 或 bindkey。"
+        "description": "此窗帘需要加密密钥，可从米家账号获取或手动输入。",
+        "menu_options": {
+          "cloud": "米家账号（推荐）",
+          "bluetooth_manual": "手动输入密钥"
         }
+      },
+      "reauth_confirm": {
+        "title": "重新验证窗帘",
+        "description": "已保存的密钥已失效。",
+        "menu_options": {
+          "cloud": "米家账号",
+          "reauth_manual": "手动输入密钥"
+        }
+      },
+      "cloud": {
+        "title": "米家账号",
+        "description": "使用绑定窗帘的账号，地区须与米家 App 一致。",
+        "data": {
+          "region": "地区"
+        },
+        "submit": "下一步"
+      },
+      "cloud_qr": {
+        "title": "等待登录"
+      },
+      "cloud_device": {
+        "title": "选择窗帘",
+        "data": {
+          "device": "窗帘"
+        },
+        "submit": "下一步"
+      },
+      "cloud_confirm": {
+        "title": "{name}",
+        "description": "{address}\n\n请先关闭米家及其他连接窗帘的应用。",
+        "submit": "连接"
+      },
+      "cloud_error": {
+        "title": "无法完成设置",
+        "submit": "重新登录"
       }
     },
     "error": {
@@ -39,15 +89,24 @@
       "invalid_ltmk": "LTMK 必须为 64 个十六进制字符。",
       "invalid_auth": "窗帘拒绝了此 LTMK。",
       "cannot_connect": "无法与窗帘通信。请检查蓝牙距离及代理的主动连接槽位，并关闭其他已连接窗帘的应用。登录失败后，请等待约 20 秒再试。",
-      "unsupported_mtu": "蓝牙连接的 MTU 不足。请检查适配器或代理固件，确保支持至少 71 的 ATT MTU。"
+      "unsupported_mtu": "蓝牙连接的 MTU 不足。请检查适配器或代理固件，确保支持至少 71 的 ATT MTU。",
+      "cloud_failed": "米家请求失败。请检查网络、账号和地区后重试。",
+      "cloud_no_devices": "未找到可添加的窗帘。请确认账号和地区正确，且设备尚未添加。",
+      "cloud_auth": "登录已过期或未获批准，请重新登录。",
+      "cloud_network": "无法连接米家服务，请检查网络后重试。",
+      "cloud_forbidden": "米家拒绝了此请求，请使用绑定窗帘的账号。"
     },
     "abort": {
       "already_configured": "此窗帘已配置。",
       "reauth_successful": "凭据已更新。",
       "not_supported": "此设备不是受支持的 Aqara 窗帘。",
-      "not_connectable": "此蓝牙来源仅支持广播监听，无法连接窗帘。请使用支持主动连接的适配器或代理。"
+      "not_connectable": "此蓝牙来源仅支持广播监听，无法连接窗帘。请使用支持主动连接的适配器或代理。",
+      "cloud_cancelled": "米家导入已取消。"
     },
-    "flow_title": "Aqara 窗帘 {suffix}"
+    "flow_title": "Aqara 窗帘 {suffix}",
+    "progress": {
+      "cloud_login": "{link_start}登录米家{link_end}\n\n登录后将自动继续。"
+    }
   },
   "entity": {
     "sensor": {
@@ -141,6 +200,20 @@
             }
           }
         }
+      }
+    }
+  },
+  "selector": {
+    "region": {
+      "options": {
+        "cn": "中国大陆",
+        "de": "欧洲",
+        "us": "美国",
+        "ru": "俄罗斯",
+        "tw": "中国台湾",
+        "sg": "新加坡",
+        "in": "印度",
+        "i2": "印度（i2）"
       }
     }
   }

@@ -2,36 +2,86 @@
   "title": "Aqara Curtain BLE",
   "config": {
     "step": {
-      "user": {
-        "title": "Connect an Aqara curtain",
-        "description": "Connect an Aqara HMCN02 Bluetooth curtain. Close Mi Home and other apps connected to the curtain, then enter its Bluetooth address and 32-byte LTMK. You can use a local Bluetooth adapter or a proxy with active connections enabled.",
+      "manual": {
+        "title": "Manual setup",
+        "description": "Close Mi Home and other apps connected to the curtain.",
         "data": {
           "address": "Bluetooth address",
-          "ltmk": "LTMK (32 bytes)"
+          "ltmk": "Encryption key (LTMK)"
         },
         "data_description": {
-          "ltmk": "64 hexadecimal characters. This is not a Mi Home BLE token or bindkey."
-        }
+          "ltmk": "64 hexadecimal characters, not a token or bindkey."
+        },
+        "submit": "Connect"
       },
-      "reauth_confirm": {
-        "title": "Update curtain credentials",
-        "description": "The curtain rejected its saved LTMK. Enter the current 32-byte LTMK.",
+      "bluetooth_manual": {
+        "description": "Close Mi Home and other apps connected to the curtain.",
         "data": {
-          "ltmk": "LTMK (32 bytes)"
+          "ltmk": "Encryption key (LTMK)"
         },
         "data_description": {
-          "ltmk": "64 hexadecimal characters. This is not a Mi Home BLE token or bindkey."
+          "ltmk": "64 hexadecimal characters, not a token or bindkey."
+        },
+        "submit": "Connect"
+      },
+      "reauth_manual": {
+        "title": "Update key",
+        "data": {
+          "ltmk": "Encryption key (LTMK)"
+        },
+        "data_description": {
+          "ltmk": "64 hexadecimal characters, not a token or bindkey."
+        },
+        "submit": "Connect"
+      },
+      "user": {
+        "title": "Add curtain",
+        "menu_options": {
+          "cloud": "Mi Home account",
+          "manual": "Enter key manually"
         }
       },
       "bluetooth_confirm": {
-        "title": "Connect your Aqara curtain",
-        "description": "Found an Aqara curtain ({address}). Close Mi Home and other apps connected to it, then enter its 32-byte LTMK.",
-        "data": {
-          "ltmk": "LTMK (32 bytes)"
-        },
-        "data_description": {
-          "ltmk": "64 hexadecimal characters. This is not a Mi Home BLE token or bindkey."
+        "description": "This curtain requires an encryption key. Import it from your Mi Home account or enter it manually.",
+        "menu_options": {
+          "cloud": "Mi Home account (recommended)",
+          "bluetooth_manual": "Enter key manually"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate curtain",
+        "description": "The saved credentials no longer work.",
+        "menu_options": {
+          "cloud": "Mi Home account",
+          "reauth_manual": "Enter key manually"
+        }
+      },
+      "cloud": {
+        "title": "Mi Home account",
+        "description": "Use the account that owns the curtain and the region selected in Mi Home.",
+        "data": {
+          "region": "Region"
+        },
+        "submit": "Next"
+      },
+      "cloud_qr": {
+        "title": "Waiting for sign-in"
+      },
+      "cloud_device": {
+        "title": "Select your curtain",
+        "data": {
+          "device": "Curtain"
+        },
+        "submit": "Next"
+      },
+      "cloud_confirm": {
+        "title": "{name}",
+        "description": "{address}\n\nClose Mi Home and other apps connected to the curtain.",
+        "submit": "Connect"
+      },
+      "cloud_error": {
+        "title": "Unable to complete setup",
+        "submit": "Sign in again"
       }
     },
     "error": {
@@ -39,15 +89,24 @@
       "invalid_ltmk": "The LTMK must be exactly 64 hexadecimal characters.",
       "invalid_auth": "The curtain rejected the LTMK.",
       "cannot_connect": "Unable to communicate with the curtain. Check Bluetooth range and available proxy connection slots, and close other apps connected to the curtain. After a failed login, wait about 20 seconds before retrying.",
-      "unsupported_mtu": "The Bluetooth connection MTU is too small. Check the adapter or proxy firmware for support of ATT MTU 71 or greater."
+      "unsupported_mtu": "The Bluetooth connection MTU is too small. Check the adapter or proxy firmware for support of ATT MTU 71 or greater.",
+      "cloud_failed": "Mi Home request failed. Check your connection, account and region, then retry.",
+      "cloud_no_devices": "No curtains available to add. Check your account and region, and whether the curtain is already configured.",
+      "cloud_auth": "Sign-in expired or was not approved. Sign in again.",
+      "cloud_network": "Unable to reach Mi Home. Check your connection and try again.",
+      "cloud_forbidden": "Mi Home denied this request. Use the account that owns the curtain."
     },
     "abort": {
       "already_configured": "This curtain is already configured.",
       "reauth_successful": "Credentials updated successfully.",
       "not_supported": "This device is not a supported Aqara curtain.",
-      "not_connectable": "This Bluetooth source only receives advertisements. Use an adapter or proxy that supports active connections."
+      "not_connectable": "This Bluetooth source only receives advertisements. Use an adapter or proxy that supports active connections.",
+      "cloud_cancelled": "Mi Home import was cancelled."
     },
-    "flow_title": "Aqara Curtain {suffix}"
+    "flow_title": "Aqara Curtain {suffix}",
+    "progress": {
+      "cloud_login": "{link_start}Sign in to Mi Home{link_end}\n\nSetup will continue automatically after sign-in."
+    }
   },
   "entity": {
     "sensor": {
@@ -141,6 +200,20 @@
             }
           }
         }
+      }
+    }
+  },
+  "selector": {
+    "region": {
+      "options": {
+        "cn": "Mainland China",
+        "de": "Europe",
+        "us": "United States",
+        "ru": "Russia",
+        "tw": "Taiwan",
+        "sg": "Singapore",
+        "in": "India",
+        "i2": "India (i2)"
       }
     }
   }

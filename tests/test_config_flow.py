@@ -13,10 +13,31 @@ from custom_components.lumi_curtain.const import DOMAIN
 from .conftest import ADDRESS, LTMK
 
 
-async def test_user_setup(hass, peripheral, ble):
+async def manual_init(hass, *, context, data=None):
+    source = context["source"]
+    if source == "user":
+        result = await hass.config_entries.flow.async_init(DOMAIN, context=context)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "manual"}
+        )
+        if data is not None:
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], data
+            )
+        return result
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}
+        DOMAIN, context=context, data=data
     )
+    if result["type"] == FlowResultType.MENU:
+        step = "bluetooth_manual" if source == "bluetooth" else "reauth_manual"
+        return await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": step}
+        )
+    return result
+
+
+async def test_user_setup(hass, peripheral, ble):
+    result = await manual_init(hass, context={"source": "user"})
     assert result["type"] == FlowResultType.FORM
     assert set(result["data_schema"].schema) == {"address", "ltmk"}
     with patch("custom_components.lumi_curtain.async_setup_entry", return_value=True):
@@ -50,8 +71,8 @@ async def test_validation_errors(hass, peripheral, ble, address, ltmk, failure, 
         peripheral.reject = True
     if failure == "unreachable":
         ble[0].return_value = None
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}, data={"address": address, "ltmk": ltmk}
+    result = await manual_init(
+        hass, context={"source": "user"}, data={"address": address, "ltmk": ltmk}
     )
     assert result["type"] == FlowResultType.FORM
     assert result["errors"] == errors
@@ -59,8 +80,8 @@ async def test_validation_errors(hass, peripheral, ble, address, ltmk, failure, 
 
 async def test_duplicate(hass, entry, ble):
     entry.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
+    result = await manual_init(
+        hass,
         context={"source": "user"},
         data={"address": ADDRESS, "ltmk": LTMK.hex()},
     )
@@ -71,12 +92,12 @@ async def test_duplicate(hass, entry, ble):
 
 async def test_reauthentication(hass, entry, peripheral, ble):
     entry.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
+    result = await manual_init(
+        hass,
         context={"source": "reauth", "entry_id": entry.entry_id},
         data=entry.data,
     )
-    assert result["step_id"] == "reauth_confirm"
+    assert result["step_id"] == "reauth_manual"
     progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)[0]
     assert progress["context"]["title_placeholders"]["suffix"] == "DDEEFF"
     result = await hass.config_entries.flow.async_configure(
@@ -127,20 +148,20 @@ def discovery(
     ],
 )
 async def test_bluetooth_discovery(hass, peripheral, ble, name, payload):
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
+    result = await manual_init(
+        hass,
         context={"source": "bluetooth"},
         data=discovery(name, payload),
     )
-    assert result["step_id"] == "bluetooth_confirm"
-    assert result["description_placeholders"] == {"address": ADDRESS}
+    assert result["step_id"] == "bluetooth_manual"
+    assert result["description_placeholders"] is None
     assert set(result["data_schema"].schema) == {"ltmk"}
     ble[1].assert_not_called()
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"ltmk": "invalid"},
     )
-    assert result["step_id"] == "bluetooth_confirm"
+    assert result["step_id"] == "bluetooth_manual"
     assert result["errors"] == {"base": "invalid_ltmk"}
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -186,8 +207,8 @@ async def test_bluetooth_discovery(hass, peripheral, ble, name, payload):
 async def test_discovery_rejects_other_devices(
     hass, ble, name, payload, connectable, reason
 ):
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
+    result = await manual_init(
+        hass,
         context={"source": "bluetooth"},
         data=discovery(name, payload, connectable),
     )
@@ -197,13 +218,13 @@ async def test_discovery_rejects_other_devices(
 
 
 async def test_discovery_deduplicates_proxy_sources(hass, entry, ble):
-    first = await hass.config_entries.flow.async_init(
-        DOMAIN,
+    first = await manual_init(
+        hass,
         context={"source": "bluetooth"},
         data=discovery(source="proxy-1"),
     )
-    second = await hass.config_entries.flow.async_init(
-        DOMAIN,
+    second = await manual_init(
+        hass,
         context={"source": "bluetooth"},
         data=discovery(source="proxy-2"),
     )
@@ -212,8 +233,8 @@ async def test_discovery_deduplicates_proxy_sources(hass, entry, ble):
     assert second["reason"] == "already_in_progress"
     hass.config_entries.flow.async_abort(first["flow_id"])
     entry.add_to_hass(hass)
-    third = await hass.config_entries.flow.async_init(
-        DOMAIN,
+    third = await manual_init(
+        hass,
         context={"source": "bluetooth"},
         data=discovery(),
     )
@@ -225,8 +246,8 @@ async def test_proxy_small_mtu_error(hass, peripheral, ble):
     from custom_components.lumi_curtain.transport import AUTH
 
     peripheral.characteristics[AUTH].max_write_without_response_size = 20
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
+    result = await manual_init(
+        hass,
         context={"source": "bluetooth"},
         data=discovery(),
     )
@@ -239,28 +260,23 @@ async def test_proxy_small_mtu_error(hass, peripheral, ble):
 
 
 @pytest.mark.parametrize(
-    ("language", "label", "title", "flow_title"),
+    ("language", "label", "flow_title"),
     [
-        ("zh-Hans", "LTMK（32 字节）", "连接 Aqara 窗帘", "Aqara 窗帘 DDEEFF"),  # noqa: RUF001
+        ("zh-Hans", "加密密钥 (LTMK)", "Aqara 窗帘 DDEEFF"),
         (
             "en",
-            "LTMK (32 bytes)",
-            "Connect your Aqara curtain",
+            "Encryption key (LTMK)",
             "Aqara Curtain DDEEFF",
         ),
     ],
 )
-async def test_discovery_translations(hass, language, label, title, flow_title):
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "bluetooth"}, data=discovery()
-    )
+async def test_discovery_translations(hass, language, label, flow_title):
+    result = await manual_init(hass, context={"source": "bluetooth"}, data=discovery())
     translations = await async_get_translations(hass, language, "config", {DOMAIN})
     prefix = f"component.{result['handler']}.config.step.{result['step_id']}"
     assert translations[f"{prefix}.data.ltmk"] == label
-    assert translations[f"{prefix}.title"] == title
-    assert ADDRESS in translations[f"{prefix}.description"].format(
-        **result["description_placeholders"]
-    )
+    assert f"{prefix}.title" not in translations
+    assert "{address}" not in translations[f"{prefix}.description"]
     progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)[0]
     assert (
         translations[f"component.{DOMAIN}.config.flow_title"].format(
@@ -277,8 +293,8 @@ async def test_failed_connection_retains_credentials(hass, entry, ble, source):
     if source == "reauth":
         entry.add_to_hass(hass)
         context["entry_id"] = entry.entry_id
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context=context, data=discovery() if source == "bluetooth" else None
+    result = await manual_init(
+        hass, context=context, data=discovery() if source == "bluetooth" else None
     )
     user_input = {"ltmk": LTMK.hex()}
     if source == "user":
@@ -291,3 +307,16 @@ async def test_failed_connection_retains_credentials(hass, entry, ble, source):
     for key, value in user_input.items():
         assert fields[key].description["suggested_value"] == value
     assert result["data_schema"].schema[fields["ltmk"]].config["type"] == "password"
+
+
+@pytest.mark.parametrize("language", ["en", "zh-Hans"])
+async def test_discovery_menu_uses_device_title(hass, language):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "bluetooth"}, data=discovery()
+    )
+    translations = await async_get_translations(hass, language, "config", {DOMAIN})
+    prefix = f"component.{DOMAIN}.config.step.bluetooth_confirm"
+    assert f"{prefix}.title" not in translations
+    assert "{address}" not in translations[f"{prefix}.description"]
+    assert result["menu_options"] == ["cloud", "bluetooth_manual"]
+    hass.config_entries.flow.async_abort(result["flow_id"])
